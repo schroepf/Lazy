@@ -14,7 +14,7 @@ class ViewController: UIViewController {
     
     @IBOutlet weak var collectionView: UICollectionView!
     
-    fileprivate let data: [UIColor]
+    fileprivate let data: [UIColor?]
     
     required init?(coder aDecoder: NSCoder) {
         data = [
@@ -46,7 +46,15 @@ class ViewController: UIViewController {
             UIColor.random(),
             UIColor.random(),
             UIColor.random(),
-            UIColor.random()
+            UIColor.random(),
+            nil,
+            nil,
+            nil,
+            nil,
+            nil,
+            nil,
+            nil,
+            nil
         ]
         super.init(coder: aDecoder)
     }
@@ -74,8 +82,6 @@ extension ViewController: UICollectionViewDataSource {
         
         return cell
     }
-    
-    
 }
 
 extension ViewController: UICollectionViewDelegate {
