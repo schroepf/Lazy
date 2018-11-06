@@ -14,6 +14,9 @@
 		AE1B3BDE21921C3300065EA8 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AE1B3BDC21921C3300065EA8 /* LaunchScreen.storyboard */; };
 		AE1B3BE921921C3300065EA8 /* LazyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE1B3BE821921C3300065EA8 /* LazyTests.swift */; };
 		AE1B3BF421921C3300065EA8 /* LazyUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE1B3BF321921C3300065EA8 /* LazyUITests.swift */; };
+		AE1B3C02219221D200065EA8 /* DefaultCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE1B3C01219221D200065EA8 /* DefaultCell.swift */; };
+		AE1B3C04219224A900065EA8 /* UIColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE1B3C03219224A900065EA8 /* UIColor.swift */; };
+		AE1B3C062192250700065EA8 /* String.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE1B3C052192250700065EA8 /* String.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -47,6 +50,9 @@
 		AE1B3BEF21921C3300065EA8 /* LazyUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LazyUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		AE1B3BF321921C3300065EA8 /* LazyUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LazyUITests.swift; sourceTree = "<group>"; };
 		AE1B3BF521921C3300065EA8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		AE1B3C01219221D200065EA8 /* DefaultCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefaultCell.swift; sourceTree = "<group>"; };
+		AE1B3C03219224A900065EA8 /* UIColor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIColor.swift; sourceTree = "<group>"; };
+		AE1B3C052192250700065EA8 /* String.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = String.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -103,6 +109,9 @@
 				AE1B3BDA21921C3300065EA8 /* Assets.xcassets */,
 				AE1B3BDC21921C3300065EA8 /* LaunchScreen.storyboard */,
 				AE1B3BDF21921C3300065EA8 /* Info.plist */,
+				AE1B3C01219221D200065EA8 /* DefaultCell.swift */,
+				AE1B3C03219224A900065EA8 /* UIColor.swift */,
+				AE1B3C052192250700065EA8 /* String.swift */,
 			);
 			path = Lazy;
 			sourceTree = "<group>";
@@ -257,6 +266,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				AE1B3BD621921C2C00065EA8 /* ViewController.swift in Sources */,
+				AE1B3C04219224A900065EA8 /* UIColor.swift in Sources */,
+				AE1B3C062192250700065EA8 /* String.swift in Sources */,
+				AE1B3C02219221D200065EA8 /* DefaultCell.swift in Sources */,
 				AE1B3BD421921C2C00065EA8 /* AppDelegate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
