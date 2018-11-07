@@ -18,30 +18,53 @@ class ViewController: UIViewController {
     
     @IBOutlet weak var collectionView: UICollectionView!
     
-    fileprivate let cache:ListItemCache<UIColor>
-    
-    required init?(coder aDecoder: NSCoder) {
-        cache = ListItemCache<UIColor>(cacheMissHandler: { (index, onSuccess, onError)  in
-            print("fetching item at index: \(index)")
-            
-            if index == 20 {
-                onSuccess(nil)
-                return
-            }
-            
-            if index % 5 == 0 {
-                onError(LoadingError.internalError("ERROR"))
-            }
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: {
-                onSuccess(UIColor.random())
-            })
+    fileprivate lazy var itemCache = LazyList<UIColor>(onLoadItem: { (index,onSuccess, onError) in
+        print("fetching item at index: \(index)")
+        
+        if index == 20 {
+            onSuccess(nil)
+            return
+        }
+        
+        if index % 5 == 0 {
+            onError(LoadingError.internalError("ERROR"))
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: {
+            onSuccess(UIColor.random())
         })
+    }, onChanged: { [weak self] in
+        DispatchQueue.main.async { [weak self] in
+            self?.collectionView.reloadData()
+        }
+    })
+    
+    private static let pageSize = 20
+    fileprivate lazy var cache = PagedLazyList<UIColor>(pageSize: ViewController.pageSize, onLoadPage: { (pageIndex, onSuccess, onError) in
+        print("fetching page at index: \(pageIndex)")
         
-        super.init(coder: aDecoder)
+        if pageIndex == 20 {
+            onSuccess(nil)
+            return
+        }
         
-        cache.delegate = self
-    }
+        if pageIndex % 5 == 0 {
+            onError(LoadingError.internalError("ERROR"))
+        }
+
+        var result = [UIColor]()
+        for i in 0 ..< ViewController.pageSize {
+            result.append(UIColor.random())
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0, execute: {
+            onSuccess(Page(index: pageIndex, items: result))
+        })
+    }, onChanged: { [weak self] in
+        DispatchQueue.main.async { [weak self] in
+            self?.collectionView.reloadData()
+        }
+    })
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -70,12 +93,4 @@ extension ViewController: UICollectionViewDataSource {
 
 extension ViewController: UICollectionViewDelegate {
     
-}
-
-extension ViewController: ListItemCacheDelegate {
-    func didUpdate() {
-        DispatchQueue.main.async { [weak self] in
-            self?.collectionView.reloadData()
-        }
-    }
 }
