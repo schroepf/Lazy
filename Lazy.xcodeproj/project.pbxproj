@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		58CB8463498E962E5AE9857E /* Pods_Lazy.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B44C97A025F1327217E416C9 /* Pods_Lazy.framework */; };
 		AE1B3BD421921C2C00065EA8 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE1B3BD321921C2C00065EA8 /* AppDelegate.swift */; };
 		AE1B3BD621921C2C00065EA8 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE1B3BD521921C2C00065EA8 /* ViewController.swift */; };
 		AE1B3BD921921C2C00065EA8 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AE1B3BD721921C2C00065EA8 /* Main.storyboard */; };
@@ -38,6 +39,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		657478BB76AE4556AC6CF16D /* Pods-Lazy.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Lazy.release.xcconfig"; path = "Target Support Files/Pods-Lazy/Pods-Lazy.release.xcconfig"; sourceTree = "<group>"; };
+		97D26396D3F71ED37E1D7583 /* Pods-Lazy.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Lazy.debug.xcconfig"; path = "Target Support Files/Pods-Lazy/Pods-Lazy.debug.xcconfig"; sourceTree = "<group>"; };
 		AE1B3BD021921C2C00065EA8 /* Lazy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Lazy.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AE1B3BD321921C2C00065EA8 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		AE1B3BD521921C2C00065EA8 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
@@ -55,6 +58,7 @@
 		AE1B3C03219224A900065EA8 /* UIColor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIColor.swift; sourceTree = "<group>"; };
 		AE1B3C052192250700065EA8 /* String.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = String.swift; sourceTree = "<group>"; };
 		AE1B3C0721922DAB00065EA8 /* LazyList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LazyList.swift; sourceTree = "<group>"; };
+		B44C97A025F1327217E416C9 /* Pods_Lazy.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Lazy.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -62,6 +66,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				58CB8463498E962E5AE9857E /* Pods_Lazy.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -89,6 +94,8 @@
 				AE1B3BE721921C3300065EA8 /* LazyTests */,
 				AE1B3BF221921C3300065EA8 /* LazyUITests */,
 				AE1B3BD121921C2C00065EA8 /* Products */,
+				F1E92FFDD88ECA5534E3C838 /* Pods */,
+				F4D0076C5A1A3A75D8C6D08B /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -137,6 +144,24 @@
 			path = LazyUITests;
 			sourceTree = "<group>";
 		};
+		F1E92FFDD88ECA5534E3C838 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				97D26396D3F71ED37E1D7583 /* Pods-Lazy.debug.xcconfig */,
+				657478BB76AE4556AC6CF16D /* Pods-Lazy.release.xcconfig */,
+			);
+			name = Pods;
+			path = Pods;
+			sourceTree = "<group>";
+		};
+		F4D0076C5A1A3A75D8C6D08B /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				B44C97A025F1327217E416C9 /* Pods_Lazy.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -144,9 +169,11 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = AE1B3BF821921C3300065EA8 /* Build configuration list for PBXNativeTarget "Lazy" */;
 			buildPhases = (
+				60D971006C8000827B5278C2 /* [CP] Check Pods Manifest.lock */,
 				AE1B3BCC21921C2C00065EA8 /* Sources */,
 				AE1B3BCD21921C2C00065EA8 /* Frameworks */,
 				AE1B3BCE21921C2C00065EA8 /* Resources */,
+				4E4DB980505B54B5F4C93B6F /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -262,6 +289,53 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		4E4DB980505B54B5F4C93B6F /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-Lazy/Pods-Lazy-frameworks.sh",
+				"${BUILT_PRODUCTS_DIR}/Smile/Smile.framework",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/Smile.framework",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Lazy/Pods-Lazy-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		60D971006C8000827B5278C2 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-Lazy-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		AE1B3BCC21921C2C00065EA8 /* Sources */ = {
@@ -446,6 +520,7 @@
 		};
 		AE1B3BF921921C3300065EA8 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 97D26396D3F71ED37E1D7583 /* Pods-Lazy.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
@@ -464,6 +539,7 @@
 		};
 		AE1B3BFA21921C3300065EA8 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 657478BB76AE4556AC6CF16D /* Pods-Lazy.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;

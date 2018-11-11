@@ -7,15 +7,24 @@
 //
 
 import UIKit
+import Smile
+
+typealias Emoji = (key: String, value: String)
+
+struct DefaultCellItem {
+    let color: UIColor
+    let emoji: Emoji
+}
 
 class DefaultCell: UICollectionViewCell {
-    @IBOutlet weak var imageView: UIImageView!
+    @IBOutlet weak var emojiView: UILabel!
     @IBOutlet weak var label: UILabel!
     
-    func bind(to data: LazyResult<UIColor>?) {
+    func bind(to data: LazyResult<DefaultCellItem>?) {
         if let error = data?.error {
             let errorColor = UIColor(hexString: "c62828") ?? UIColor.red
-            imageView.backgroundColor = errorColor
+            emojiView.text = emojiList["no_entry"]
+            emojiView.backgroundColor = errorColor
             
             if let error = error as? LoadingError {
                 label.text = error.description
@@ -27,16 +36,19 @@ class DefaultCell: UICollectionViewCell {
             return
         }
         
-        if let color = data?.value {
-            imageView.backgroundColor = color
-            label.text = color.toHexString()
+        if let item = data?.value {
+            label.text = item.emoji.key
+            emojiView.text = item.emoji.value
+            emojiView.backgroundColor = UIColor.white.withAlphaComponent(0.6)
             
-            backgroundColor = color.withAlphaComponent(0.3)
+            backgroundColor = item.color.withAlphaComponent(0.3)
             return
         }
         
         let placeholderColor = UIColor(hexString: "9e9e9e") ?? UIColor.black
-        imageView.backgroundColor = placeholderColor
+        let emoji = emojiList["sleeping"]
+        emojiView.text = emoji
+        emojiView.backgroundColor = placeholderColor
         label.text = "loading..."
         backgroundColor = placeholderColor.withAlphaComponent(0.3)    }
 }

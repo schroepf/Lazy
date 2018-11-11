@@ -7,6 +7,7 @@
 //
 
 import UIKit
+import Smile
 
 enum LoadingError: Error {
     case internalError(message: String)
@@ -27,7 +28,7 @@ class ViewController: UIViewController {
     
     @IBOutlet weak var collectionView: UICollectionView!
     
-    fileprivate lazy var cache = LazyList<UIColor>(onLoadItem: { (index, onSuccess, onError) in
+    fileprivate lazy var cache = LazyList<DefaultCellItem>(onLoadItem: { (index, onSuccess, onError) in
         print("fetching item at index: \(index)")
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: {
@@ -41,7 +42,8 @@ class ViewController: UIViewController {
                 return
             }
             
-            onSuccess(UIColor.random())
+            let emoji = emojiList.randomElement() ?? (key: "", value: "")
+            onSuccess(DefaultCellItem(color: UIColor.random(), emoji: emoji))
         })
     }, onChanged: { [weak self] in
         DispatchQueue.main.async { [weak self] in
