@@ -13,3 +13,10 @@ extension String {
         return Int(self, radix: 16)
     }
 }
+
+extension String {
+    
+    func randomEmoji() -> String {
+        return "🤬"
+    }
+}
