@@ -3,4 +3,5 @@ use_frameworks!
 
 target 'Lazy' do
   pod 'Smile'
+  pod 'DeepDiff'
 end

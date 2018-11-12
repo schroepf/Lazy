@@ -6,8 +6,9 @@
 //  Copyright © 2018 Tobias Schröpf. All rights reserved.
 //
 
-import UIKit
+import DeepDiff
 import Smile
+import UIKit
 
 enum LoadingError: Error {
     case internalError(message: String)
@@ -28,87 +29,52 @@ class ViewController: UIViewController {
     
     @IBOutlet weak var collectionView: UICollectionView!
     
-    fileprivate lazy var _cache = LazyList<DefaultCellItem>(onLoadItem: { (index, onSuccess, onError) in
-        print("fetching item at index: \(index)")
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: {
-            if index == 20 {
-                onSuccess(nil)
-                return
-            }
-            
-            if index % 7 == 0 {
-                onError(LoadingError.internalError(message: "Loading item \(index) failed..."))
-                return
-            }
-            
-            onSuccess(DefaultCellItem(color: UIColor.random(), emoji: emojiList.randomElement() ?? (key: "", value: "")))
-        })
-    }, onChanged: { [weak self] in
-        DispatchQueue.main.async { [weak self] in
-            self?.collectionView.reloadData()
-        }
-    })
-    
-    private static let pageSize = 3
-    fileprivate lazy var cache = PagedLazyList<DefaultCellItem>(pageSize: ViewController.pageSize, onLoadPage: { (pageIndex, onSuccess, onError) in
-        print("fetching page at index: \(pageIndex)")
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: {
-            if pageIndex == 6 {
-                let result = [
-                    DefaultCellItem(color: UIColor.random(), emoji: emojiList.randomElement() ?? (key: "", value: "")),
-                    DefaultCellItem(color: UIColor.random(), emoji: emojiList.randomElement() ?? (key: "", value: ""))
-                ]
-
-                onSuccess(Page(index: pageIndex, items: result))
-                return
-            }
-
-            if pageIndex == 20 {
-                // paging should stop at page 7 -> return nil
-                onSuccess(nil)
-                return
-            }
-            
-            if pageIndex % 5 == 0 {
-                onError(LoadingError.internalError(message: "error loading page \(pageIndex)"))
-                return
-            }
-            
-            var result = [DefaultCellItem]()
-            for i in 0 ..< ViewController.pageSize {
-                result.append(DefaultCellItem(color: UIColor.random(), emoji: emojiList.randomElement() ?? (key: "", value: "")))
-            }
-            
-            onSuccess(Page(index: pageIndex, items: result))
-        })
-    }, onChanged: { [weak self] in
-        DispatchQueue.main.async { [weak self] in
-            self?.collectionView.reloadData()
-        }
-    })
+    private var viewModel = ViewModel()
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        // Do any additional setup after loading the view, typically from a nib.
         
         collectionView.dataSource = self
         collectionView.delegate = self
         collectionView.prefetchDataSource = self
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        viewModel.callback = { [weak self] (oldItems, newItems, placeholders) in
+            guard let old = oldItems, let new = newItems else {
+                DispatchQueue.main.async {
+                    self?.collectionView.reloadData()
+                }
+                return
+            }
+            
+            let changes = diff(old: old, new: new)
+            let placeholderPaths = placeholders.map { IndexPath(row: $0, section: 0) }
+            
+            DispatchQueue.main.async {
+                self?.collectionView.reload(changes: changes, section: 0, completion: { (result) in
+                    self?.collectionView.reloadItems(at: placeholderPaths)
+                })
+            }
+        }
+    }
+    
+    override func viewDidDisappear(_ animated: Bool) {
+        viewModel.callback = nil
     }
 }
 
 
 extension ViewController: UICollectionViewDataSource {
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        return cache.flattenedItems().count
+        return viewModel.currentItems.count
     }
     
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: ViewController.reuseIdentifier,
                                                       for: indexPath) as! DefaultCell
-        cell.bind(to: cache[indexPath.row])
+        
+        cell.bind(to: viewModel.item(at: indexPath.row))
         
         return cell
     }
@@ -116,13 +82,17 @@ extension ViewController: UICollectionViewDataSource {
 
 extension ViewController: UICollectionViewDelegate {
     
+    func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
+        viewModel.prefetch(index: indexPath.row)
+    }
+    
 }
 
 extension ViewController: UICollectionViewDataSourcePrefetching {
     func collectionView(_ collectionView: UICollectionView, prefetchItemsAt indexPaths: [IndexPath]) {
         indexPaths.forEach { (indexPath) in
             // assume we only have one sction:
-            cache.prefetch(index: indexPath.row)
+            viewModel.prefetch(index: indexPath.row)
         }
     }
 }
