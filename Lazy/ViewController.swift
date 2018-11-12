@@ -28,22 +28,21 @@ class ViewController: UIViewController {
     
     @IBOutlet weak var collectionView: UICollectionView!
     
-    fileprivate lazy var cache = LazyList<DefaultCellItem>(onLoadItem: { (index, onSuccess, onError) in
+    fileprivate lazy var _cache = LazyList<DefaultCellItem>(onLoadItem: { (index, onSuccess, onError) in
         print("fetching item at index: \(index)")
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: {
             if index == 20 {
                 onSuccess(nil)
                 return
             }
             
-            if index % 2 == 0 {
+            if index % 7 == 0 {
                 onError(LoadingError.internalError(message: "Loading item \(index) failed..."))
                 return
             }
             
-            let emoji = emojiList.randomElement() ?? (key: "", value: "")
-            onSuccess(DefaultCellItem(color: UIColor.random(), emoji: emoji))
+            onSuccess(DefaultCellItem(color: UIColor.random(), emoji: emojiList.randomElement() ?? (key: "", value: "")))
         })
     }, onChanged: { [weak self] in
         DispatchQueue.main.async { [weak self] in
@@ -51,25 +50,37 @@ class ViewController: UIViewController {
         }
     })
     
-    private static let pageSize = 20
-    fileprivate lazy var _cache = PagedLazyList<UIColor>(pageSize: ViewController.pageSize, onLoadPage: { (pageIndex, onSuccess, onError) in
+    private static let pageSize = 3
+    fileprivate lazy var cache = PagedLazyList<DefaultCellItem>(pageSize: ViewController.pageSize, onLoadPage: { (pageIndex, onSuccess, onError) in
         print("fetching page at index: \(pageIndex)")
         
-        if pageIndex == 20 {
-            onSuccess(nil)
-            return
-        }
-        
-        if pageIndex % 2 == 0 {
-            onError(LoadingError.internalError(message: "error loading page \(pageIndex)"))
-        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: {
+            if pageIndex == 6 {
+                let result = [
+                    DefaultCellItem(color: UIColor.random(), emoji: emojiList.randomElement() ?? (key: "", value: "")),
+                    DefaultCellItem(color: UIColor.random(), emoji: emojiList.randomElement() ?? (key: "", value: ""))
+                ]
 
-        var result = [UIColor]()
-        for i in 0 ..< ViewController.pageSize {
-            result.append(UIColor.random())
-        }
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0, execute: {
+                onSuccess(Page(index: pageIndex, items: result))
+                return
+            }
+
+            if pageIndex == 20 {
+                // paging should stop at page 7 -> return nil
+                onSuccess(nil)
+                return
+            }
+            
+            if pageIndex % 5 == 0 {
+                onError(LoadingError.internalError(message: "error loading page \(pageIndex)"))
+                return
+            }
+            
+            var result = [DefaultCellItem]()
+            for i in 0 ..< ViewController.pageSize {
+                result.append(DefaultCellItem(color: UIColor.random(), emoji: emojiList.randomElement() ?? (key: "", value: "")))
+            }
+            
             onSuccess(Page(index: pageIndex, items: result))
         })
     }, onChanged: { [weak self] in
@@ -91,14 +102,12 @@ class ViewController: UIViewController {
 
 extension ViewController: UICollectionViewDataSource {
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        return cache.size()
+        return cache.flattenedItems().count
     }
     
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: ViewController.reuseIdentifier,
                                                       for: indexPath) as! DefaultCell
-        
-        print("cellForItemAt: \(indexPath.row)")
         cell.bind(to: cache[indexPath.row])
         
         return cell
@@ -113,7 +122,6 @@ extension ViewController: UICollectionViewDataSourcePrefetching {
     func collectionView(_ collectionView: UICollectionView, prefetchItemsAt indexPaths: [IndexPath]) {
         indexPaths.forEach { (indexPath) in
             // assume we only have one sction:
-            print("prefetch item at: \(indexPath.row)")
             cache.prefetch(index: indexPath.row)
         }
     }

@@ -6,6 +6,14 @@
 //  Copyright © 2018 Tobias Schröpf. All rights reserved.
 //
 
+
+// TODOs:
+// - refactor size() to count property
+// - add API to specify cache size for LazyList (and PagedLazyList)
+// - fix Threading (make sure callbacks are executed on a background scheduler)
+// - synchronize access to elementRequests
+// - refactor LazyResult to LazyItem
+// - is there a swiftier way to implement items() in PagedLazyList?
 import Foundation
 
 // TODO: (TS) this could become a "LazyItem" which has the capability to fetch items and LayzList could consist of LazyItems
@@ -61,6 +69,10 @@ class LazyList<Element> {
     }
     
     public func prefetch(index: Index) {
+        prefetch(item: index)
+    }
+    
+    fileprivate func prefetch(item index: Index) {
         let sortedKeys = elementRequests.keys.sorted()
         
         if let first = sortedKeys.first, let last = sortedKeys.last {
@@ -68,57 +80,37 @@ class LazyList<Element> {
             assert(index >= max(0, first - 1) && index <= last + 1, "Invalid index: \(index). Expected index range: [\(first)..\(last)]")
         }
         
-        if sortedKeys.isEmpty                                             // initial call
+        if sortedKeys.isEmpty                                            // initial call
             || (index == sortedKeys.first! - 1 && allowLoadBefore())     // allow access to page before current first page
             || (index == sortedKeys.last! + 1 && allowLoadAfter()) {     // allow access to page after current last page
-            
-            print("prefetching: \(index)")
             
             elementRequests[index] = ElementRequest(result: nil)
             onLoadItem(
                 index,
-                { self.elementRequests[index] = ElementRequest(result: LazyResult(value: $0, error: nil)) },
+                {
+                    if $0 == nil {
+                        // if the closure was called with a 'nil'  result make sure to clean up pending neighbour requests
+                        if let previousRequest = self.elementRequests[index - 1], previousRequest.result == nil {
+                            self.elementRequests.removeValue(forKey: index - 1)
+                        }
+                        
+                        if let nextRequest = self.elementRequests[index + 1], nextRequest.result == nil {
+                            self.elementRequests.removeValue(forKey: index + 1)
+                        }
+                    }
+                    
+                    self.elementRequests[index] = ElementRequest(result: LazyResult(value: $0, error: nil))
+            },
                 { self.elementRequests[index] = ElementRequest(result: LazyResult(value: nil, error: $0)) }
             )
         }
     }
     
     public subscript (index: Index) -> LazyResult<Element>? {
-        prefetch(index: index)
+        prefetch(item: index)
         
         assert(elementRequests.keys.contains(index), "Request out of bounds")
         return elementRequests[index]!.result
-    }
-    
-    // TODO: refactor to `count` property
-    public func size() -> Int {
-        if elementRequests.isEmpty {
-            // while there are no elements yet return a placeholder
-            return 1
-        }
-        
-        var numberOfItems = elementRequests.filter { (_, request) -> Bool in
-            guard let result = request.result else {
-                // requests with no result are considered pending and should display a placeholder...
-                return true
-            }
-            
-            // "empty" requests (i.e. requests which returned a "nil" value) are considered as "out of bounds" and do not count to the list's size
-            return !result.isEmpty()
-        }
-            .count
-        
-        if allowLoadBefore()  {
-            // if the first element finished loading and has a value allow accessing
-            numberOfItems += 1
-        }
-        
-        if allowLoadAfter() {
-            // if the last element finished loading and has a value allow accessing
-            numberOfItems += 1
-        }
-        
-        return numberOfItems
     }
     
     public func items() -> [LazyResult<Element>?] {
@@ -126,7 +118,17 @@ class LazyList<Element> {
             return [nil]
         }
         
-        var result = elementRequests.keys.sorted().map { elementRequests[$0]?.result }
+        var result = elementRequests.keys.sorted()
+            .map { elementRequests[$0]?.result }
+            .filter { (result) -> Bool in
+                guard let result = result else {
+                    // if result is "nil" it's a placeholder item... -> keep it...
+                    return true
+                }
+                
+                // if the result is empty it's an item for which no data could be loaded (out of bounds item) -> don't keep it...
+                return !result.isEmpty()
+        }
         
         if allowLoadBefore() {
             result.insert(nil, at: 0)
@@ -144,11 +146,21 @@ class LazyList<Element> {
             return false
         }
         
+        if let result = firstRequest.result, result.isEmpty() {
+            // loading of first item has finished but the result was "nil" => there is no more page before the current first page:
+            return false
+        }
+        
         return !firstRequest.isLoading()
     }
     
     private func allowLoadAfter() -> Bool {
         guard let last = elementRequests.keys.sorted().last, let lastRequest = elementRequests[last] else {
+            return false
+        }
+        
+        if let result = lastRequest.result, result.isEmpty() {
+            // loading of first item has finished but the result was "nil" => there is no more page before the current first page:
             return false
         }
         
@@ -174,39 +186,70 @@ class PagedLazyList<Element>: LazyList<Page<Element>> {
     }
     
     public subscript (index: Index) -> LazyResult<Element>? {
-        let pageIndex = index / pageSize
-        let indexInPage = index % pageSize
+        let translatedIndex = translate(index: index)
         
-        guard let pageResult = super[pageIndex] else {
+        guard let pageResult = super[translatedIndex.page] else {
             return nil
         }
         
         guard let page = pageResult.value else {
-            return LazyResult(value: nil, error: super[pageIndex]?.error)
+            return LazyResult(value: nil, error: super[translatedIndex.page]?.error)
         }
         
-        return LazyResult(value: page.items[indexInPage], error: nil)
+        return LazyResult(value: page.items[translatedIndex.item], error: nil)
     }
     
-    public override func size() -> Int {
-        var count = 0
-        items().forEach { (pageResult) in
-            guard let pageResult = pageResult else {
-                // if the item is nil it means that the page is not loaded yet and a placholder should be displayed -> add +1 for the placholder item
-                count += 1
+    func flattenedItems() -> [LazyResult<Element>?] {
+        var items = [LazyResult<Element>?]()
+        
+        // TODO: (TS) maybe there is a swiftier way to do this...
+        super.items().forEach { (result) in
+            guard let result = result else {
+                items.append(nil)
                 return
             }
             
-            guard let page = pageResult.value else {
-                // if there is a pageResult but it contains no value it must contain an error -> add +1 for the error item
-                count += 1
+            guard let values = result.value?.items else {
+                items.append(LazyResult(value: nil, error: result.error))
                 return
             }
             
-            count += page.items.count
+            items += values.map { (element) -> LazyResult<Element>? in
+                return LazyResult(value: element, error: nil)
+            }
         }
         
-        return count
+        return items
+    }
+    
+    override func prefetch(index: LazyList<Element>.Index) {
+        super.prefetch(item: translate(index: index).page)
+    }
+    
+    private func translate(index: Index) -> (page: Int, item: Int) {
+        let pages = super.items()
+        
+        var remaining = index
+        var pageIndex = 0
+        var indexInPage = 0
+        
+        while remaining > 0, pageIndex < pages.count {
+            guard let result = pages[pageIndex], let page = result.value else {
+                remaining -= 1
+                pageIndex += 1
+                continue
+            }
+            
+            let items = page.items.count
+            if remaining < items {
+                indexInPage = remaining
+            } else {
+                pageIndex += 1
+            }
+            
+            remaining -= items
+        }
+        
+        return (page: pageIndex, item: indexInPage)
     }
 }
-
