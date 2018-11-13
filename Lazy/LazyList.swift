@@ -8,6 +8,7 @@
 
 
 // TODOs:
+// - fix crash when a page with 0 items is received
 // - refactor size() to count property
 // - add API to specify cache size for LazyList (and PagedLazyList)
 // - fix Threading (make sure callbacks are executed on a background scheduler)
@@ -188,12 +189,9 @@ struct Page<T> {
 }
 
 class PagedLazyList<Element> {
-    let pageSize: Int
-    
     let backingStore: LazyItemList<Page<Element>>
     
-    init(pageSize: Int, onLoadPage: @escaping LoadItemHandler<Page<Element>>, onChanged: (() -> Void)?) {
-        self.pageSize = pageSize
+    init( onLoadPage: @escaping LoadItemHandler<Page<Element>>, onChanged: (() -> Void)?) {
         self.backingStore = LazyItemList(onLoadItem: onLoadPage, onChanged: onChanged)
     }
     
@@ -207,6 +205,11 @@ class PagedLazyList<Element> {
         while remaining > 0, pageIndex < pages.count {
             guard let result = pages[pageIndex], let page = result.value else {
                 remaining -= 1
+                pageIndex += 1
+                continue
+            }
+            
+            guard page.items.count > 0 else {
                 pageIndex += 1
                 continue
             }
@@ -234,7 +237,7 @@ extension PagedLazyList: LazyList {
         }
         
         guard let page = pageResult.value else {
-            return LazyResult(value: nil, error: backingStore[translatedIndex.page]?.error)
+            return LazyResult(value: nil, error: pageResult.error)
         }
         
         return LazyResult(value: page.items[translatedIndex.item], error: nil)

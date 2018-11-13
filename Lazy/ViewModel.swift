@@ -38,24 +38,10 @@ extension DefaultCellItem {
 }
 
 class ViewModel {
-    enum Constants {
-        static let pageSize = 3
-    }
-    
-    private lazy var cache = PagedLazyList<ColorEmoji>(pageSize: Constants.pageSize, onLoadPage: { (pageIndex, onSuccess, onError) in
+    private lazy var cache = PagedLazyList<ColorEmoji>(onLoadPage: { (pageIndex, onSuccess, onError) in
         print("fetching page at index: \(pageIndex)")
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: {
-            if pageIndex == 6 {
-                let result = [
-                    ColorEmoji.random(),
-                    ColorEmoji.random()
-                ]
-
-                onSuccess(Page(index: pageIndex, items: result))
-                return
-            }
-
             if pageIndex == 20 {
                 // paging should stop at page 7 -> return nil
                 onSuccess(nil)
@@ -68,7 +54,8 @@ class ViewModel {
             }
 
             var result = [ColorEmoji]()
-            for _ in 0 ..< Constants.pageSize {
+            // randomize the size of the generated page - but don't return an empty list!
+            for _ in 0 ..< Int.random(in: 1...30) {
                 result.append(ColorEmoji.random())
             }
 

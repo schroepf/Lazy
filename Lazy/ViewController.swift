@@ -53,6 +53,7 @@ class ViewController: UIViewController {
             
             DispatchQueue.main.async {
                 self?.collectionView.reload(changes: changes, section: 0, completion: { (result) in
+                    // re-trigger loading of visible placeholders to make sure data ir actually fetched
                     self?.collectionView.reloadItems(at: placeholderPaths)
                 })
             }
