@@ -32,7 +32,24 @@ extension LazyResult: CustomDebugStringConvertible {
     }
 }
 
-class LazyList<Element> {
+typealias Index = Int
+
+// pass 'nil' as argument to this callback for items which don't exist (i.e. "out of bounds") - to signal that there is not item ...
+typealias SuccessCallback<Element> = (Element?) -> ()
+typealias ErrorCallback = (Error) -> ()
+typealias LoadItemHandler<Element> = (Index, @escaping SuccessCallback<Element>, @escaping ErrorCallback) -> ()
+
+protocol LazyList {
+    associatedtype itemType
+    
+    subscript (index: Index) -> LazyResult<itemType>? { get }
+    
+    func prefetch(index: Index)
+    
+    func items() -> [LazyResult<itemType>?]
+}
+
+class LazyItemList<Element> {
     
     struct ElementRequest {
         // while result is "nil" the request is considered as ongoing...
@@ -46,13 +63,6 @@ class LazyList<Element> {
             return result == nil
         }
     }
-    
-    typealias Index = Int
-    
-    // pass 'nil' as argument to this callback for items which don't exist (i.e. "out of bounds") - to signal that there is not item ...
-    typealias SuccessCallback = (Element?) -> ()
-    typealias ErrorCallback = (Error) -> ()
-    typealias LoadItemHandler = (Index, @escaping SuccessCallback, @escaping ErrorCallback) -> ()
 
     private var elementRequests: [Index: ElementRequest] = [Index: ElementRequest]() {
         didSet {
@@ -60,19 +70,51 @@ class LazyList<Element> {
         }
     }
     
-    private let onLoadItem: LoadItemHandler
+    private let onLoadItem: LoadItemHandler<Element>
     private let onChanged: (() -> Void)?
     
-    init(onLoadItem: @escaping LoadItemHandler, onChanged: (() -> Void)? = nil) {
+    init(onLoadItem: @escaping LoadItemHandler<Element>, onChanged: (() -> Void)? = nil) {
         self.onLoadItem = onLoadItem
         self.onChanged = onChanged
     }
     
-    public func prefetch(index: Index) {
-        prefetch(item: index)
+    private func allowLoadBefore() -> Bool {
+        guard let first = elementRequests.keys.sorted().first, first > 0, let firstRequest = elementRequests[first] else {
+            return false
+        }
+        
+        if let result = firstRequest.result, result.isEmpty() {
+            // loading of first item has finished but the result was "nil" => there is no more page before the current first page:
+            return false
+        }
+        
+        return !firstRequest.isLoading()
     }
     
-    fileprivate func prefetch(item index: Index) {
+    private func allowLoadAfter() -> Bool {
+        guard let last = elementRequests.keys.sorted().last, let lastRequest = elementRequests[last] else {
+            return false
+        }
+        
+        if let result = lastRequest.result, result.isEmpty() {
+            // loading of first item has finished but the result was "nil" => there is no more page before the current first page:
+            return false
+        }
+        
+        return !lastRequest.isLoading()
+    }
+}
+
+extension LazyItemList: LazyList {
+    
+    public subscript (index: Index) -> LazyResult<Element>? {
+        prefetch(index: index)
+        
+        assert(elementRequests.keys.contains(index), "Request out of bounds")
+        return elementRequests[index]!.result
+    }
+    
+    public func prefetch(index: Index) {
         let sortedKeys = elementRequests.keys.sorted()
         
         if let first = sortedKeys.first, let last = sortedKeys.last {
@@ -106,13 +148,6 @@ class LazyList<Element> {
         }
     }
     
-    public subscript (index: Index) -> LazyResult<Element>? {
-        prefetch(item: index)
-        
-        assert(elementRequests.keys.contains(index), "Request out of bounds")
-        return elementRequests[index]!.result
-    }
-    
     public func items() -> [LazyResult<Element>?] {
         guard !elementRequests.isEmpty else {
             return [nil]
@@ -140,34 +175,10 @@ class LazyList<Element> {
         
         return result
     }
-    
-    private func allowLoadBefore() -> Bool {
-        guard let first = elementRequests.keys.sorted().first, first > 0, let firstRequest = elementRequests[first] else {
-            return false
-        }
-        
-        if let result = firstRequest.result, result.isEmpty() {
-            // loading of first item has finished but the result was "nil" => there is no more page before the current first page:
-            return false
-        }
-        
-        return !firstRequest.isLoading()
-    }
-    
-    private func allowLoadAfter() -> Bool {
-        guard let last = elementRequests.keys.sorted().last, let lastRequest = elementRequests[last] else {
-            return false
-        }
-        
-        if let result = lastRequest.result, result.isEmpty() {
-            // loading of first item has finished but the result was "nil" => there is no more page before the current first page:
-            return false
-        }
-        
-        return !lastRequest.isLoading()
-    }
 }
 
+
+// MARK: - PagedLazyList
 
 typealias PageIndex = Int
 
@@ -176,58 +187,18 @@ struct Page<T> {
     let items: [T]
 }
 
-class PagedLazyList<Element>: LazyList<Page<Element>> {
+class PagedLazyList<Element> {
     let pageSize: Int
     
-    init(pageSize: Int, onLoadPage: @escaping LoadItemHandler, onChanged: (() -> Void)?) {
+    let backingStore: LazyItemList<Page<Element>>
+    
+    init(pageSize: Int, onLoadPage: @escaping LoadItemHandler<Page<Element>>, onChanged: (() -> Void)?) {
         self.pageSize = pageSize
-        
-        super.init(onLoadItem: onLoadPage, onChanged: onChanged)
+        self.backingStore = LazyItemList(onLoadItem: onLoadPage, onChanged: onChanged)
     }
     
-    public subscript (index: Index) -> LazyResult<Element>? {
-        let translatedIndex = translate(index: index)
-        
-        guard let pageResult = super[translatedIndex.page] else {
-            return nil
-        }
-        
-        guard let page = pageResult.value else {
-            return LazyResult(value: nil, error: super[translatedIndex.page]?.error)
-        }
-        
-        return LazyResult(value: page.items[translatedIndex.item], error: nil)
-    }
-    
-    func flattenedItems() -> [LazyResult<Element>?] {
-        var items = [LazyResult<Element>?]()
-        
-        // TODO: (TS) maybe there is a swiftier way to do this...
-        super.items().forEach { (result) in
-            guard let result = result else {
-                items.append(nil)
-                return
-            }
-            
-            guard let values = result.value?.items else {
-                items.append(LazyResult(value: nil, error: result.error))
-                return
-            }
-            
-            items += values.map { (element) -> LazyResult<Element>? in
-                return LazyResult(value: element, error: nil)
-            }
-        }
-        
-        return items
-    }
-    
-    override func prefetch(index: LazyList<Element>.Index) {
-        super.prefetch(item: translate(index: index).page)
-    }
-    
-    private func translate(index: Index) -> (page: Int, item: Int) {
-        let pages = super.items()
+    fileprivate func translate(index: Index) -> (page: Int, item: Int) {
+        let pages = backingStore.items()
         
         var remaining = index
         var pageIndex = 0
@@ -251,5 +222,48 @@ class PagedLazyList<Element>: LazyList<Page<Element>> {
         }
         
         return (page: pageIndex, item: indexInPage)
+    }
+}
+
+extension PagedLazyList: LazyList {
+    public subscript (index: Index) -> LazyResult<Element>? {
+        let translatedIndex = translate(index: index)
+        
+        guard let pageResult = backingStore[translatedIndex.page] else {
+            return nil
+        }
+        
+        guard let page = pageResult.value else {
+            return LazyResult(value: nil, error: backingStore[translatedIndex.page]?.error)
+        }
+        
+        return LazyResult(value: page.items[translatedIndex.item], error: nil)
+    }
+    
+    public func prefetch(index: Index) {
+        backingStore.prefetch(index: translate(index: index).page)
+    }
+    
+    public func items() -> [LazyResult<Element>?] {
+        var items = [LazyResult<Element>?]()
+        
+        // TODO: (TS) maybe there is a swiftier way to do this...
+        backingStore.items().forEach { (result) in
+            guard let result = result else {
+                items.append(nil)
+                return
+            }
+            
+            guard let values = result.value?.items else {
+                items.append(LazyResult(value: nil, error: result.error))
+                return
+            }
+            
+            items += values.map { (element) -> LazyResult<Element>? in
+                return LazyResult(value: element, error: nil)
+            }
+        }
+        
+        return items
     }
 }
