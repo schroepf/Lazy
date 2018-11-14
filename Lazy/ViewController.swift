@@ -52,8 +52,9 @@ class ViewController: UIViewController {
             let placeholderPaths = placeholders.map { IndexPath(row: $0, section: 0) }
             
             DispatchQueue.main.async {
+//                self?.collectionView.reloadData()
                 self?.collectionView.reload(changes: changes, section: 0, completion: { (result) in
-                    // re-trigger loading of visible placeholders to make sure data ir actually fetched
+                    // re-trigger loading of visible placeholders to make sure data is actually fetched
                     self?.collectionView.reloadItems(at: placeholderPaths)
                 })
             }

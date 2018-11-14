@@ -10,85 +10,85 @@ import DeepDiff
 import Foundation
 import Smile
 
-struct ColorEmoji {
-    let color: UIColor
-    let emoji: String
-    let emojiName: String
-    
-    fileprivate static func random() -> ColorEmoji {
-        let emoji = emojiList.randomElement()!
-        return ColorEmoji(color: UIColor.random(), emoji: emoji.value, emojiName: emoji.key)
-    }
-}
-
 extension DefaultCellItem {
+    struct Constants {
+        static let errorColor = UIColor(hexString: "c62828")!
+        static let errorEmoji = emojiList["no_entry"]!
+        
+        static let loadingColor = UIColor(hexString: "9e9e9e")!
+        static let loadingEmoji = emojiList["sleeping"]!
+    }
+    
     fileprivate static func from(result: LazyResult<ColorEmoji>?) -> DefaultCellItem {
         if let error = result?.error {
             let text = (error as? LoadingError)?.description ?? "unknown"
-            return DefaultCellItem(color: UIColor(hexString: "c62828")!, emoji: emojiList["no_entry"]!, text: text)
+            return DefaultCellItem(color: Constants.errorColor, emoji: Constants.errorEmoji, text: text)
         }
-        
         
         if let item = result?.value {
             return DefaultCellItem(color: item.color, emoji: item.emoji, text: item.emojiName)
         }
         
-        return DefaultCellItem(color: UIColor(hexString: "9e9e9e")!, emoji: emojiList["sleeping"]!, text: "loading...")
+        return DefaultCellItem(color: Constants.loadingColor, emoji: Constants.loadingEmoji, text: "loading...")
     }
 }
 
 class ViewModel {
-    private lazy var cache = PagedLazyList<ColorEmoji>(onLoadPage: { (pageIndex, onSuccess, onError) in
-        print("fetching page at index: \(pageIndex)")
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: {
-            if pageIndex == 20 {
-                // paging should stop at page 7 -> return nil
-                onSuccess(nil)
-                return
-            }
-
-            if pageIndex % 5 == 0 {
-                onError(LoadingError.internalError(message: "error loading page \(pageIndex)"))
-                return
-            }
-
-            var result = [ColorEmoji]()
-            // randomize the size of the generated page - but don't return an empty list!
-            for _ in 0 ..< Int.random(in: 1...30) {
-                result.append(ColorEmoji.random())
-            }
-
-            onSuccess(Page(index: pageIndex, items: result))
-        })
-    }, onChanged: { [weak self] in
-        self?.update()
-    })
     
-//    private lazy var cache = LazyItemList<ColorEmoji>(onLoadItem: { (index, onSuccess, onError) in
-//        print("fetching item at index: \(index)")
-//
-//        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: {
-//            if index == 20 {
-//                onSuccess(nil)
-//                return
-//            }
-//
-//            if index % 7 == 0 {
-//                onError(LoadingError.internalError(message: "Loading item \(index) failed..."))
-//                return
-//            }
-//
-//            onSuccess(ColorEmoji.random())
-//        })
-//    }, onChanged: { [weak self] in
-//        self?.update()
-//    })
+    struct Constants {
+        static let maxPageSize = 7
+    }
+    
+    let backend = Backend()
     
     var callback: (([DefaultCellItem]?, [DefaultCellItem]?, [Int]) -> ())? = nil
     
     var currentPlaceholders: [Int] = [Int]()
     var currentItems: [DefaultCellItem] = [DefaultCellItem]()
+
+    private lazy var cache = LazyList<ColorEmoji>(
+        onLoadBefore: { (index, onSuccess, onError) in
+            print("fetching items BEFORE index: \(index)")
+            
+            // randomize the size of the generated page - but don't return an empty list!
+            let pageSize: Int = Int.random(in: 0...Constants.maxPageSize)
+            self.backend.loadEmojis(skip: index - 1 - pageSize, top: pageSize, callback: { (result, error) in
+                if let error = error {
+                    onError(error)
+                    return
+                }
+                
+                onSuccess(result)
+            })
+    },
+        onLoadItem: { (index, onSuccess, onError) in
+            print("fetching item AT index: \(index)")
+            
+            self.backend.loadEmojis(skip: index, top: 1, callback: { (result, error) in
+                if let error = error {
+                    onError(error)
+                    return
+                }
+                
+                onSuccess(result?.first)
+            })
+    },
+        onLoadAfter: { (index, onSuccess, onError) in
+            print("fetching items AFTER index: \(index)")
+            
+            let pageSize = Int.random(in: 0...Constants.maxPageSize)
+            self.backend.loadEmojis(skip: index + 1, top: pageSize, callback: { (result, error) in
+                if let error = error {
+                    onError(error)
+                    return
+                }
+                
+                onSuccess(result)
+            })
+    },
+        onChanged: { [weak self] in
+            self?.update()
+    })
     
     init() {
         update()

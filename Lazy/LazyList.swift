@@ -6,18 +6,14 @@
 //  Copyright © 2018 Tobias Schröpf. All rights reserved.
 //
 
-
 // TODOs:
-// - fix crash when a page with 0 items is received
+// - allow cancellation of requests
 // - refactor size() to count property
 // - add API to specify cache size for LazyList (and PagedLazyList)
 // - fix Threading (make sure callbacks are executed on a background scheduler)
-// - synchronize access to elementRequests
-// - refactor LazyResult to LazyItem
-// - is there a swiftier way to implement items() in PagedLazyList?
+// - synchronize access to requests array
 import Foundation
 
-// TODO: (TS) this could become a "LazyItem" which has the capability to fetch items and LayzList could consist of LazyItems
 struct LazyResult<Element> {
     let value: Element?
     let error: Error?
@@ -40,233 +36,184 @@ typealias SuccessCallback<Element> = (Element?) -> ()
 typealias ErrorCallback = (Error) -> ()
 typealias LoadItemHandler<Element> = (Index, @escaping SuccessCallback<Element>, @escaping ErrorCallback) -> ()
 
-protocol LazyList {
-    associatedtype itemType
+private struct LazyRequest<Element> {
+    // while result is "nil" the request is considered as ongoing...
+    let result: LazyResult<Element>?
     
-    subscript (index: Index) -> LazyResult<itemType>? { get }
+    func hasResult() -> Bool {
+        return result != nil
+    }
     
-    func prefetch(index: Index)
+    func isLoading() -> Bool {
+        return result == nil
+    }
     
-    func items() -> [LazyResult<itemType>?]
+    static func from(item: Element?) -> LazyRequest? {
+        return item == nil ? nil : LazyRequest(result: LazyResult(value: item, error: nil))
+    }
+    
+    static func wrap(value: Element? = nil, error: Error? = nil) -> LazyRequest {
+        return LazyRequest(result: LazyResult(value: value, error: error))
+    }
 }
 
-class LazyItemList<Element> {
-    
-    struct ElementRequest {
-        // while result is "nil" the request is considered as ongoing...
-        let result: LazyResult<Element>?
-        
-        func hasResult() -> Bool {
-            return result != nil
-        }
-        
-        func isLoading() -> Bool {
-            return result == nil
-        }
-    }
 
-    private var elementRequests: [Index: ElementRequest] = [Index: ElementRequest]() {
+class LazyList<Element> {
+    
+    private let onLoadBefore: LoadItemHandler<[Element]>
+    private let onLoadItem: LoadItemHandler<Element>
+    private let onLoadAfter: LoadItemHandler<[Element]>
+    private let onChanged: (() -> Void)?
+    
+    private var requests: [LazyRequest<Element>?] = [nil] {
         didSet {
             onChanged?()
         }
     }
     
-    private let onLoadItem: LoadItemHandler<Element>
-    private let onChanged: (() -> Void)?
-    
-    init(onLoadItem: @escaping LoadItemHandler<Element>, onChanged: (() -> Void)? = nil) {
+    init(onLoadBefore: @escaping LoadItemHandler<[Element]>,
+         onLoadItem: @escaping LoadItemHandler<Element>,
+         onLoadAfter: @escaping LoadItemHandler<[Element]>,
+         onChanged: (() -> Void)? = nil) {
+        self.onLoadBefore = onLoadBefore
         self.onLoadItem = onLoadItem
+        self.onLoadAfter = onLoadAfter
         self.onChanged = onChanged
     }
     
-    private func allowLoadBefore() -> Bool {
-        guard let first = elementRequests.keys.sorted().first, first > 0, let firstRequest = elementRequests[first] else {
-            return false
-        }
-        
-        if let result = firstRequest.result, result.isEmpty() {
-            // loading of first item has finished but the result was "nil" => there is no more page before the current first page:
-            return false
-        }
-        
-        return !firstRequest.isLoading()
-    }
-    
-    private func allowLoadAfter() -> Bool {
-        guard let last = elementRequests.keys.sorted().last, let lastRequest = elementRequests[last] else {
-            return false
-        }
-        
-        if let result = lastRequest.result, result.isEmpty() {
-            // loading of first item has finished but the result was "nil" => there is no more page before the current first page:
-            return false
-        }
-        
-        return !lastRequest.isLoading()
-    }
-}
-
-extension LazyItemList: LazyList {
-    
-    public subscript (index: Index) -> LazyResult<Element>? {
+    subscript(index: Index) -> LazyResult<Element>? {
         prefetch(index: index)
-        
-        assert(elementRequests.keys.contains(index), "Request out of bounds")
-        return elementRequests[index]!.result
+        return requests[index]?.result
     }
     
-    public func prefetch(index: Index) {
-        let sortedKeys = elementRequests.keys.sorted()
-        
-        if let first = sortedKeys.first, let last = sortedKeys.last {
-            // elements has been checked for emptyness -> forced unwrapping of first and last key should be fine now...
-            assert(index >= max(0, first - 1) && index <= last + 1, "Invalid index: \(index). Expected index range: [\(first)..\(last)]")
+    func prefetch(index: Index) {
+        guard requests[index] == nil else {
+            // a request is already started...
+            return
         }
         
-        if sortedKeys.isEmpty                                            // initial call
-            || (index == sortedKeys.first! - 1 && allowLoadBefore())     // allow access to page before current first page
-            || (index == sortedKeys.last! + 1 && allowLoadAfter()) {     // allow access to page after current last page
-            
-            elementRequests[index] = ElementRequest(result: nil)
-            onLoadItem(
-                index,
-                {
-                    if $0 == nil {
-                        // if the closure was called with a 'nil'  result make sure to clean up pending neighbour requests
-                        if let previousRequest = self.elementRequests[index - 1], previousRequest.result == nil {
-                            self.elementRequests.removeValue(forKey: index - 1)
-                        }
-                        
-                        if let nextRequest = self.elementRequests[index + 1], nextRequest.result == nil {
-                            self.elementRequests.removeValue(forKey: index + 1)
-                        }
-                    }
-                    
-                    self.elementRequests[index] = ElementRequest(result: LazyResult(value: $0, error: nil))
-            },
-                { self.elementRequests[index] = ElementRequest(result: LazyResult(value: nil, error: $0)) }
-            )
+        requests[index] = LazyRequest(result: nil)
+        
+        if index == 0 && requests.count > 1 {
+            triggerLoadBefore(index: index + 1)
+        } else if index == requests.count - 1 {
+            triggerLoadAfter(index: index - 1)
+        } else {
+            triggerLoadItem(index: index)
         }
     }
     
-    public func items() -> [LazyResult<Element>?] {
-        guard !elementRequests.isEmpty else {
+    // nil values in the result array are considered as "loading" items...
+    func items() -> [LazyResult<Element>?] {
+        guard requests.count > 0 else {
+            // if there are no requests yet just emit a placeholder...
             return [nil]
         }
         
-        var result = elementRequests.keys.sorted()
-            .map { elementRequests[$0]?.result }
-            .filter { (result) -> Bool in
-                guard let result = result else {
-                    // if result is "nil" it's a placeholder item... -> keep it...
+        var results = requests
+            .filter{ (request) in
+                guard let result = request?.result else {
                     return true
                 }
                 
-                // if the result is empty it's an item for which no data could be loaded (out of bounds item) -> don't keep it...
                 return !result.isEmpty()
-        }
+            }
+            .map { $0?.result }
         
-        if allowLoadBefore() {
-            result.insert(nil, at: 0)
+        // if the last item is not an error or not empty (i.e. if it has a value add a placeholder to the bottom:
+        if let _ = requests.last??.result?.value {
+            results.append(nil)
         }
-        
-        if allowLoadAfter() {
-            result.append(nil)
-        }
-        
-        return result
-    }
-}
 
-
-// MARK: - PagedLazyList
-
-typealias PageIndex = Int
-
-struct Page<T> {
-    let index: PageIndex
-    let items: [T]
-}
-
-class PagedLazyList<Element> {
-    let backingStore: LazyItemList<Page<Element>>
-    
-    init( onLoadPage: @escaping LoadItemHandler<Page<Element>>, onChanged: (() -> Void)?) {
-        self.backingStore = LazyItemList(onLoadItem: onLoadPage, onChanged: onChanged)
+        return results
     }
     
-    fileprivate func translate(index: Index) -> (page: Int, item: Int) {
-        let pages = backingStore.items()
-        
-        var remaining = index
-        var pageIndex = 0
-        var indexInPage = 0
-        
-        while remaining > 0, pageIndex < pages.count {
-            guard let result = pages[pageIndex], let page = result.value else {
-                remaining -= 1
-                pageIndex += 1
-                continue
-            }
-            
-            guard page.items.count > 0 else {
-                pageIndex += 1
-                continue
-            }
-            
-            let items = page.items.count
-            if remaining < items {
-                indexInPage = remaining
-            } else {
-                pageIndex += 1
-            }
-            
-            remaining -= items
-        }
-        
-        return (page: pageIndex, item: indexInPage)
-    }
-}
-
-extension PagedLazyList: LazyList {
-    public subscript (index: Index) -> LazyResult<Element>? {
-        let translatedIndex = translate(index: index)
-        
-        guard let pageResult = backingStore[translatedIndex.page] else {
-            return nil
-        }
-        
-        guard let page = pageResult.value else {
-            return LazyResult(value: nil, error: pageResult.error)
-        }
-        
-        return LazyResult(value: page.items[translatedIndex.item], error: nil)
+    func update(_ item: Element?, at index: Index) {
+        requests[index] = LazyRequest.from(item: item)
     }
     
-    public func prefetch(index: Index) {
-        backingStore.prefetch(index: translate(index: index).page)
+    func insert(_ item: Element?, at index: Index) {
+        requests.insert(LazyRequest.from(item: item), at: index)
     }
     
-    public func items() -> [LazyResult<Element>?] {
-        var items = [LazyResult<Element>?]()
-        
-        // TODO: (TS) maybe there is a swiftier way to do this...
-        backingStore.items().forEach { (result) in
-            guard let result = result else {
-                items.append(nil)
-                return
+    func insert(contentsOf items: [Element?], at index: Index) {
+        let requestsToAdd = items.map{ LazyRequest.from(item: $0) }
+        requests.insert(contentsOf: requestsToAdd, at: index)
+    }
+    
+    func append(_ item: Element?) {
+        insert(item, at: requests.count)
+    }
+    
+    func append(contentsOf items: [Element?]) {
+        insert(contentsOf: items, at: requests.count)
+    }
+    
+    func remove(at index: Index) {
+        requests.remove(at: index)
+    }
+    
+    private func triggerLoadBefore(index: Index) {
+        onLoadBefore(
+            index,
+            { [weak self] (result) in
+                guard let self = self else {
+                    return
+                }
+                
+                var updatedRequests = self.requests
+                updatedRequests.remove(at: 0)
+                
+                if let result = result, !result.isEmpty {
+                    updatedRequests.insert(contentsOf: result.map { LazyRequest.wrap(value: $0) }, at: 0)
+                    updatedRequests.insert(nil, at: 0)
+                } else {
+                    updatedRequests.append(LazyRequest.wrap(value: nil, error: nil))
+                }
+                
+                self.requests = updatedRequests
+            },
+            { [weak self] (error) in
+                self?.requests[index - 1] = LazyRequest.wrap(error: error)
             }
-            
-            guard let values = result.value?.items else {
-                items.append(LazyResult(value: nil, error: result.error))
-                return
+        )
+    }
+    
+    private func triggerLoadAfter(index: Index) {
+        onLoadAfter(
+            index,
+            { [weak self] (result) in
+                guard let self = self else {
+                    return
+                }
+                
+                var updatedRequests = self.requests
+                updatedRequests.remove(at: updatedRequests.count - 1)
+                
+                if let result = result, !result.isEmpty {
+                    updatedRequests.insert(contentsOf: result.map { LazyRequest.wrap(value: $0) }, at: updatedRequests.count)
+                    updatedRequests.append(nil)
+                } else {
+                    updatedRequests.append(LazyRequest.wrap(value: nil, error: nil))
+                }
+                
+                self.requests = updatedRequests
+            },
+            { [weak self] (error) in
+                self?.requests[index + 1] = LazyRequest.wrap(error: error)
             }
-            
-            items += values.map { (element) -> LazyResult<Element>? in
-                return LazyResult(value: element, error: nil)
+        )
+    }
+    
+    private func triggerLoadItem(index: Index) {
+        onLoadItem(
+            index,
+            { [weak self] (result) in
+                self?.requests[index] = LazyRequest.wrap(value: result)
+            },
+            { [weak self] (error) in
+                self?.requests[index] = LazyRequest.wrap(error: error)
             }
-        }
-        
-        return items
+        )
     }
 }
