@@ -7,6 +7,7 @@
 //
 
 import DeepDiff
+import Differ
 import Smile
 import UIKit
 
@@ -40,23 +41,33 @@ class ViewController: UIViewController {
     }
     
     override func viewWillAppear(_ animated: Bool) {
-        viewModel.callback = { [weak self] (oldItems, newItems, placeholders) in
-            guard let old = oldItems, let new = newItems else {
-                DispatchQueue.main.async {
-                    self?.collectionView.reloadData()
-                }
-                return
-            }
-            
-            let changes = diff(old: old, new: new)
+        viewModel = ViewModel()
+        collectionView.reloadData()
+        viewModel.callback = { [weak self] (oldItems, newItems, placeholders, changes) in
+
             let placeholderPaths = placeholders.map { IndexPath(row: $0, section: 0) }
             
-            DispatchQueue.main.async {
+            // Use Differ
+//            if let oldItems = oldItems, let newItems = newItems {
+//                self?.collectionView.animateItemChanges(oldData: oldItems, newData: newItems, completion: { (_) in
+//                    self?.collectionView.reloadItems(at: placeholderPaths)
+//                })
+//            } else {
 //                self?.collectionView.reloadData()
+//            }
+            
+            // Use DeepDiff
+            if let changes = changes {
+                log.debug("will reload with changes: \(changes)")
+
                 self?.collectionView.reload(changes: changes, section: 0, completion: { (result) in
                     // re-trigger loading of visible placeholders to make sure data is actually fetched
+                    
+                    log.debug("did reload with changes: \(changes)")
                     self?.collectionView.reloadItems(at: placeholderPaths)
                 })
+            } else {
+                self?.collectionView.reloadData()
             }
         }
     }
@@ -69,7 +80,7 @@ class ViewController: UIViewController {
 
 extension ViewController: UICollectionViewDataSource {
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        return viewModel.currentItems.count
+        return viewModel.count()
     }
     
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
@@ -77,17 +88,14 @@ extension ViewController: UICollectionViewDataSource {
                                                       for: indexPath) as! DefaultCell
         
         cell.bind(to: viewModel.item(at: indexPath.row))
-        
         return cell
     }
 }
 
 extension ViewController: UICollectionViewDelegate {
-    
     func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
         viewModel.prefetch(index: indexPath.row)
     }
-    
 }
 
 extension ViewController: UICollectionViewDataSourcePrefetching {

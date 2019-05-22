@@ -7,15 +7,35 @@
 //
 
 import UIKit
+import XCGLogger
+
+let log = XCGLogger.default
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
     var window: UIWindow?
 
-
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        log.setup(level: .debug, showThreadName: true, showLevel: true, showFileNames: true, showLineNumbers: true, fileLevel: .debug)
+
+        // You can also change the labels for each log level, most useful for alternate languages, French, German etc, but Emoji's are more fun
+        log.levelDescriptions[.verbose] = "💜"
+        log.levelDescriptions[.debug] = "💚"
+        log.levelDescriptions[.info] = "💙"
+        log.levelDescriptions[.notice] = "💛"
+        log.levelDescriptions[.warning] = "🧡"
+        log.levelDescriptions[.error] = "❤️"
+        log.levelDescriptions[.severe] = "🖤"
+
+        log.logAppDetails()
+
+        log.verbose("A verbose message, usually useful when working on a specific problem")
+        log.debug("A debug message")
+        log.info("An info message, probably useful to power users looking in console.app")
+        log.warning("A warning message, may indicate a possible error")
+        log.error("An error occurred, but it's recoverable, just info about what happened")
+        log.severe("A severe error occurred, we are likely about to crash now")
         return true
     }
 

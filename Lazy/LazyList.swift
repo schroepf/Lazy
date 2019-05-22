@@ -10,8 +10,6 @@
 // - allow cancellation of requests
 // - refactor size() to count property
 // - add API to specify cache size for LazyList (and PagedLazyList)
-// - fix Threading (make sure callbacks are executed on a background scheduler)
-// - synchronize access to requests array
 import Foundation
 
 struct LazyResult<Element> {
@@ -60,17 +58,81 @@ private struct LazyRequest<Element> {
 
 class LazyList<Element> {
     
+    // A helper class to manage and synchronize access to the requests array...
+    private class RequestsAccess<Element> {
+        private let accessQueue = DispatchQueue(label: "LazyList.RequestsAccess")
+        private let onChanged: (() -> Void)
+        
+        init(onChanged: @escaping (() -> Void)) {
+            self.onChanged = onChanged
+        }
+        
+        private var requests: [LazyRequest<Element>?] = [nil] {
+            didSet {
+                onChanged()
+            }
+        }
+        
+        fileprivate subscript(index: Index) -> LazyRequest<Element>? {
+            get {
+                return accessQueue.sync { requests[index] }
+            }
+            
+            set {
+                accessQueue.async {
+                    self.requests[index] = newValue
+                }
+            }
+        }
+        
+        fileprivate func readAll() -> [LazyRequest<Element>?] {
+            return accessQueue.sync { requests }
+        }
+        
+        fileprivate func update(_ block: ([LazyRequest<Element>?]) -> ([LazyRequest<Element>?])) {
+            accessQueue.sync {
+                requests = block(requests)
+            }
+        }
+        
+        fileprivate func updateAsync(_ block: @escaping ([LazyRequest<Element>?]) -> ([LazyRequest<Element>?])) {
+            accessQueue.async {
+                self.requests = block(self.requests)
+            }
+        }
+        
+        fileprivate func sync(_ block: () -> ()) {
+            accessQueue.sync {
+                block()
+            }
+        }
+        
+        fileprivate func async(_ block: @escaping () -> ()) {
+            accessQueue.async {
+                block()
+            }
+        }
+    }
+    
+    private let callbackQueue = DispatchQueue(label: "LazyList.Callbacks")
+    
     private let onLoadBefore: LoadItemHandler<[Element]>
     private let onLoadItem: LoadItemHandler<Element>
     private let onLoadAfter: LoadItemHandler<[Element]>
     private let onChanged: (() -> Void)?
     
-    private var requests: [LazyRequest<Element>?] = [nil] {
-        didSet {
-            onChanged?()
+    private lazy var requests = RequestsAccess<Element>(onChanged: {
+        guard let onChanged = self.onChanged else {
+            return
         }
-    }
+        
+        self.callbackQueue.async {
+            onChanged()
+        }
+    })
     
+    
+    // TODO: Add documentation!
     init(onLoadBefore: @escaping LoadItemHandler<[Element]>,
          onLoadItem: @escaping LoadItemHandler<Element>,
          onLoadAfter: @escaping LoadItemHandler<[Element]>,
@@ -81,30 +143,40 @@ class LazyList<Element> {
         self.onChanged = onChanged
     }
     
+    // TODO: Add documentation
     subscript(index: Index) -> LazyResult<Element>? {
         prefetch(index: index)
         return requests[index]?.result
     }
     
+    // TODO: Add documentation
     func prefetch(index: Index) {
         guard requests[index] == nil else {
             // a request is already started...
             return
         }
         
-        requests[index] = LazyRequest(result: nil)
-        
-        if index == 0 && requests.count > 1 {
-            triggerLoadBefore(index: index + 1)
-        } else if index == requests.count - 1 {
-            triggerLoadAfter(index: index - 1)
-        } else {
-            triggerLoadItem(index: index)
+        self.requests.update { (requests) -> ([LazyRequest<Element>?]) in
+            var result = requests
+            result[index] = LazyRequest(result: nil)    // FIXME: This triggers an unnecessary onChanged() call
+            
+            if index == 0 && requests.count > 1 {
+                triggerLoadBefore(index: index + 1)
+            } else if index == requests.count - 1 {
+                triggerLoadAfter(index: index - 1)
+            } else {
+                triggerLoadItem(index: index)
+            }
+            
+            return result
         }
     }
     
+    // TODO: Add documentation
     // nil values in the result array are considered as "loading" items...
     func items() -> [LazyResult<Element>?] {
+        let requests = self.requests.readAll()
+        
         guard requests.count > 0 else {
             // if there are no requests yet just emit a placeholder...
             return [nil]
@@ -129,91 +201,136 @@ class LazyList<Element> {
     }
     
     func update(_ item: Element?, at index: Index) {
-        requests[index] = LazyRequest.from(item: item)
+        requests.update { (requests) -> ([LazyRequest<Element>?]) in
+            var result = requests
+            result[index] = LazyRequest.from(item: item)
+            return result
+        }
     }
     
     func insert(_ item: Element?, at index: Index) {
-        requests.insert(LazyRequest.from(item: item), at: index)
+        requests.update { (requests) -> ([LazyRequest<Element>?]) in
+            var result = requests
+            result.insert(LazyRequest.from(item: item), at: index)
+            return result
+        }
     }
     
     func insert(contentsOf items: [Element?], at index: Index) {
         let requestsToAdd = items.map{ LazyRequest.from(item: $0) }
-        requests.insert(contentsOf: requestsToAdd, at: index)
+        
+        requests.update { (requests) -> ([LazyRequest<Element>?]) in
+            var result = requests
+            result.insert(contentsOf: requestsToAdd, at: index)
+            return result
+        }
     }
     
     func append(_ item: Element?) {
-        insert(item, at: requests.count)
+        insert(item, at: requests.readAll().count)
     }
     
     func append(contentsOf items: [Element?]) {
-        insert(contentsOf: items, at: requests.count)
+        insert(contentsOf: items, at: requests.readAll().count)
     }
     
     func remove(at index: Index) {
-        requests.remove(at: index)
+        requests.update { (requests) -> ([LazyRequest<Element>?]) in
+            var result = requests
+            result.remove(at: index)
+            return result
+        }
+    }
+    
+    func clear() {
+        requests.update { (_) -> ([LazyRequest<Element>?]) in
+            return [nil]
+        }
     }
     
     private func triggerLoadBefore(index: Index) {
-        onLoadBefore(
-            index,
-            { [weak self] (result) in
-                guard let self = self else {
-                    return
-                }
-                
-                var updatedRequests = self.requests
-                updatedRequests.remove(at: 0)
-                
-                if let result = result, !result.isEmpty {
-                    updatedRequests.insert(contentsOf: result.map { LazyRequest.wrap(value: $0) }, at: 0)
-                    updatedRequests.insert(nil, at: 0)
-                } else {
-                    updatedRequests.append(LazyRequest.wrap(value: nil, error: nil))
-                }
-                
-                self.requests = updatedRequests
-            },
-            { [weak self] (error) in
-                self?.requests[index - 1] = LazyRequest.wrap(error: error)
+        callbackQueue.async { [weak self] in
+            guard let self = self else {
+                return
             }
-        )
+            
+            self.onLoadBefore(
+                index,
+                { [weak self] (result) in
+                    guard let self = self else {
+                        return
+                    }
+                    
+                    self.requests.updateAsync({ (requests) -> ([LazyRequest<Element>?]) in
+                        var updatedRequests = requests
+                        updatedRequests.remove(at: 0)
+                        
+                        if let result = result, !result.isEmpty {
+                            updatedRequests.insert(contentsOf: result.map { LazyRequest.wrap(value: $0) }, at: 0)
+                            updatedRequests.insert(nil, at: 0)
+                        } else {
+                            updatedRequests.append(LazyRequest.wrap(value: nil, error: nil))
+                        }
+                        
+                        return updatedRequests
+                    })
+                },
+                { [weak self] (error) in
+                    self?.requests[index - 1] = LazyRequest.wrap(error: error)
+                }
+            )
+        }
     }
     
     private func triggerLoadAfter(index: Index) {
-        onLoadAfter(
-            index,
-            { [weak self] (result) in
-                guard let self = self else {
-                    return
-                }
-                
-                var updatedRequests = self.requests
-                updatedRequests.remove(at: updatedRequests.count - 1)
-                
-                if let result = result, !result.isEmpty {
-                    updatedRequests.insert(contentsOf: result.map { LazyRequest.wrap(value: $0) }, at: updatedRequests.count)
-                    updatedRequests.append(nil)
-                } else {
-                    updatedRequests.append(LazyRequest.wrap(value: nil, error: nil))
-                }
-                
-                self.requests = updatedRequests
-            },
-            { [weak self] (error) in
-                self?.requests[index + 1] = LazyRequest.wrap(error: error)
+        callbackQueue.async { [weak self] in
+            guard let self = self else {
+                return
             }
-        )
+
+            self.onLoadAfter(
+                index,
+                { [weak self] (result) in
+                    guard let self = self else {
+                        return
+                    }
+                    
+                    self.requests.updateAsync({ (requests) -> ([LazyRequest<Element>?]) in
+                        var updatedRequests = requests
+                        updatedRequests.remove(at: updatedRequests.count - 1)
+                        
+                        if let result = result, !result.isEmpty {
+                            updatedRequests.insert(contentsOf: result.map { LazyRequest.wrap(value: $0) }, at: updatedRequests.count)
+                            updatedRequests.append(nil)
+                        } else {
+                            updatedRequests.append(LazyRequest.wrap(value: nil, error: nil))
+                        }
+                        
+                        return updatedRequests
+                    })
+                },
+                { [weak self] (error) in
+                    self?.requests[index + 1] = LazyRequest.wrap(error: error)
+                }
+            )
+        }
     }
     
     private func triggerLoadItem(index: Index) {
-        onLoadItem(
-            index,
-            { [weak self] (result) in
-                self?.requests[index] = LazyRequest.wrap(value: result)
-            },
-            { [weak self] (error) in
-                self?.requests[index] = LazyRequest.wrap(error: error)
+        callbackQueue.async { [weak self] in
+            guard let self = self else {
+                return
             }
-        )
+            
+            self.onLoadItem(
+                index,
+                { [weak self] (result) in
+                    self?.requests[index] = LazyRequest.wrap(value: result)
+                },
+                { [weak self] (error) in
+                    self?.requests[index] = LazyRequest.wrap(error: error)
+                }
+            )
+        }
     }
 }
