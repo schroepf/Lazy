@@ -44,7 +44,7 @@ class Backend {
                 result.append(ColorEmoji.create(index: i))
             }
 
-            log.debug("loading emojis: \(result.map { $0.emoji })")
+            log.verbose("loading emojis: \(result.map { $0.emoji })")
             callback(result, nil)
         }
     }

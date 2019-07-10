@@ -29,10 +29,10 @@ extension LazyResult: CustomDebugStringConvertible {
 
 typealias Index = Int
 
-// pass 'nil' as argument to this callback for items which don't exist (i.e. "out of bounds") - to signal that there is not item ...
-typealias SuccessCallback<Element> = (Element?) -> ()
+// pass 'nil' as argument to this callback for items which don't exist (i.e. "out of bounds") - to signal that there is no item ...
+typealias SuccessCallback<Result> = (Result?) -> ()
 typealias ErrorCallback = (Error) -> ()
-typealias LoadItemHandler<Element> = (Index, @escaping SuccessCallback<Element>, @escaping ErrorCallback) -> ()
+typealias LoadItemHandler<Result> = (Index, @escaping SuccessCallback<Result>, @escaping ErrorCallback) -> ()
 
 private struct LazyRequest<Element> {
     // while result is "nil" the request is considered as ongoing...
