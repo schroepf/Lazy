@@ -12,27 +12,31 @@ import Smile
 struct ColorEmoji {
     let index: Int
     let color: UIColor
-    let emoji: String
+    let emoji: String?
     let emojiName: String
     
     fileprivate static func create(index: Int) -> ColorEmoji {
-        let emoji = emojiList.randomElement()!
-        return ColorEmoji(index: index, color: UIColor.random(), emoji: emoji.value, emojiName: emoji.key)
+        let emoji = emojiList.randomElement()
+        return ColorEmoji(index: index, color: UIColor.random(), emoji: emoji?.value, emojiName: emoji?.key ?? "UNKNOWN")
     }
 }
 
 class Backend {
-    struct Constants {
-        static let simulatedDatasetSize = 2000
-        static let simulatedDelay = 0.02
+    private let simulatedDatasetSize: Int
+    private let simulatedDelay: Double
+
+    init(simulatedDatasetSize: Int = 20,
+         simulatedDelay: Double = 0.02) {
+        self.simulatedDatasetSize = simulatedDatasetSize
+        self.simulatedDelay = simulatedDelay
     }
     
     private let dispatchQueue = DispatchQueue(label: "Backend worker queue")
     
     func loadEmojis(skip: Int, top: Int, callback: @escaping ([ColorEmoji]?, Error?) -> Void) {
         
-        dispatchQueue.asyncAfter(deadline: .now() + Constants.simulatedDelay) {
-            guard (0 ..< Constants.simulatedDatasetSize).contains(skip) else {
+        dispatchQueue.asyncAfter(deadline: .now() + simulatedDelay) {
+            guard (0 ..< self.simulatedDatasetSize).contains(skip) else {
 //                callback(nil, LoadingError.internalError(message: "error loading items from index \(index)"))
                 callback(nil, nil)
                 return
@@ -40,7 +44,7 @@ class Backend {
             
             var result = [ColorEmoji]()
             
-            for i in skip ..< min(skip + top, Constants.simulatedDatasetSize) {
+            for i in skip ..< min(skip + top, self.simulatedDatasetSize) {
                 result.append(ColorEmoji.create(index: i))
             }
 

@@ -36,24 +36,15 @@ extension DefaultCellItem {
 class ViewModel {
     enum Constants {
         static let maxPageSize = 20
-        static let maxContentSize = 50
     }
     
-    let backend = Backend()
+    let backend = Backend(simulatedDatasetSize: 2, simulatedDelay: 0.02)
 
     private let currentItemsAccess = DispatchQueue(label: "CurrentItemsAccessQueue")
-
-    private var currentItems: [DefaultCellItem]? {
-        didSet {
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                self.callback?(oldValue, self.currentItems)
-            }
-        }
-    }
     
-    var callback: (([DefaultCellItem]?, [DefaultCellItem]?) -> ())? = nil
+    var callback: (([DefaultCellItem]?, [DefaultCellItem]?, [Int]) -> ())? = nil
 
+    var currentItems = [LazyResult<ColorEmoji>?]()
     private lazy var cache = LazyList<ColorEmoji>(
         onLoadBefore: { (index, onSuccess, onError) in
             log.debug("fetching items BEFORE index: \(index)")
@@ -85,11 +76,7 @@ class ViewModel {
     },
         onLoadAfter: { (index, onSuccess, onError) in
             log.debug("fetching items AFTER index: \(index)")
-            if index + 1 >= Constants.maxContentSize {
-                onSuccess(nil)
-                return
-            }
-            let pageSize = min(Int.random(in: 1...Constants.maxPageSize), Constants.maxContentSize - (index + 1))
+            let pageSize = Int.random(in: 1...Constants.maxPageSize)
             self.backend.loadEmojis(skip: index + 1, top: pageSize, callback: { (result, error) in
                 if let error = error {
                     log.error("loading item AFTER index: \(index) failed with error: \(error)")
@@ -97,7 +84,7 @@ class ViewModel {
                     return
                 }
 
-                log.debug("loading item AT index: \(index) finished successfully (pageSize: \(result?.count), requestedSize: \(pageSize)")
+                log.debug("loading item AT index: \(index) finished successfully (pageSize: \(result?.count ?? 0), requestedSize: \(pageSize)")
                 onSuccess(result)
             })
     },
@@ -107,7 +94,6 @@ class ViewModel {
     })
     
     init() {
-        self.currentItems = nil
     }
     
     func item(at index: Int) -> DefaultCellItem {
@@ -124,11 +110,17 @@ class ViewModel {
 
     private func update() {
         currentItemsAccess.async {
-            self.currentItems = self.cache.items().map { DefaultCellItem.from(result: $0) }
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
 
-            let placeholders = self.currentItems?.enumerated()
-                .filter { $0.element == nil }
-                .map { $0.offset }
+                let previousItems = self.currentItems
+                self.currentItems = self.cache.items()
+                self.callback?(previousItems.map { DefaultCellItem.from(result: $0) },
+                               self.currentItems.map { DefaultCellItem.from(result: $0) },
+                               self.currentItems.enumerated()
+                                .filter { $0.element == nil }
+                                .map { $0.offset })
+            }
         }
     }
 }

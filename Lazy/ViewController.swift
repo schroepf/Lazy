@@ -49,7 +49,8 @@ class ViewController: UIViewController {
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        viewModel.callback = { [weak self] oldItems, newItems in
+        viewModel.callback = { [weak self] oldItems, newItems, placeholders in
+            self?.refreshControl.endRefreshing()
             guard let self = self, let newItems = newItems else { return }
 
             guard let changes = self.dataSource.diff(against: newItems) else {
@@ -63,10 +64,13 @@ class ViewController: UIViewController {
             log.debug("will reload with changes: \(changes)")
             self.collectionView.reload(changes: changes, section: 0, completion: { _ in
                 log.debug("did reload with changes: \(changes)")
+
+                let placeholderPaths = placeholders.map { IndexPath(row: $0, section: 0) }
+                self.collectionView.reloadItems(at: placeholderPaths)
             })
         }
 
-//        refresh()
+        refresh()
     }
 
     override func viewDidDisappear(_ animated: Bool) {
@@ -83,7 +87,6 @@ class ViewController: UIViewController {
 
 extension ViewController: UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
-        log.debug("UICollectionViewDataSource - willDisplay: \(indexPath)")
         viewModel.prefetch(index: indexPath.row)
     }
 }
@@ -112,12 +115,10 @@ class DataSource<ItemType>: NSObject, UICollectionViewDataSource {
     }
 
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        log.debug("DataSource - count: \(items.count)")
         return items.count
     }
 
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
-        log.debug("DataSource - cellForItemAt: \(indexPath)")
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: reuseIdentifier, for: indexPath)
 
         cellBinder(items[indexPath.row], cell)

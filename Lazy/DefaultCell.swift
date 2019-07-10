@@ -11,7 +11,7 @@ import Smile
 
 struct DefaultCellItem: Hashable {
     let color: UIColor
-    let emoji: String
+    let emoji: String?
     let text: String
 }
 
