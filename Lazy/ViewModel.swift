@@ -36,9 +36,11 @@ extension DefaultCellItem {
 class ViewModel {
     enum Constants {
         static let maxPageSize = 20
+        static let simulatedDatasetSize = 50
+        static let simulatedDelay = 0.002
     }
     
-    let backend = Backend(simulatedDatasetSize: 2, simulatedDelay: 0.02)
+    let backend = Backend(simulatedDatasetSize: Constants.simulatedDatasetSize, simulatedDelay: Constants.simulatedDelay)
 
     private let currentItemsAccess = DispatchQueue(label: "CurrentItemsAccessQueue")
     
