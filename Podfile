@@ -6,4 +6,7 @@ target 'Lazy' do
   pod 'Smile'
   pod 'DeepDiff'
   pod 'Differ'
+
+  pod 'SwiftLint'
+  pod 'SwiftFormat/CLI'
 end

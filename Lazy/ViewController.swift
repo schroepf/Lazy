@@ -26,16 +26,16 @@ extension LoadingError {
 
 class ViewController: UIViewController {
     fileprivate static let reuseIdentifier = "DefaultCell"
-    
-    @IBOutlet weak var collectionView: UICollectionView!
+
+    @IBOutlet var collectionView: UICollectionView!
     private lazy var refreshControl = UIRefreshControl()
-    
+
     private var viewModel = ViewModel()
     private var dataSource = DefaultDataSource(items: [])
-    
+
     override func viewDidLoad() {
         super.viewDidLoad()
-        collectionView.dataSource = self.dataSource
+        collectionView.dataSource = dataSource
         collectionView.delegate = self
         collectionView.prefetchDataSource = self
 
@@ -46,10 +46,10 @@ class ViewController: UIViewController {
 
         viewModel = ViewModel()
     }
-    
+
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        viewModel.callback = { [weak self] oldItems, newItems, placeholders in
+        viewModel.callback = { [weak self] _, newItems, placeholders in
             self?.refreshControl.endRefreshing()
             guard let self = self, let newItems = newItems else { return }
 
@@ -58,11 +58,11 @@ class ViewController: UIViewController {
                 return
             }
 
-            log.debug("updating dataSource")
-            self.dataSource.items = newItems
-
             log.debug("will reload with changes: \(changes)")
-            self.collectionView.reload(changes: changes, section: 0, completion: { _ in
+            self.collectionView.reload(changes: changes, section: 0, updateData: {
+                log.debug("updating dataSource")
+                self.dataSource.items = newItems
+            }, completion: { _ in
                 log.debug("did reload with changes: \(changes)")
 
                 let placeholderPaths = placeholders.map { IndexPath(row: $0, section: 0) }
@@ -86,15 +86,15 @@ class ViewController: UIViewController {
 }
 
 extension ViewController: UICollectionViewDelegate {
-    func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
+    func collectionView(_: UICollectionView, willDisplay _: UICollectionViewCell, forItemAt indexPath: IndexPath) {
         viewModel.prefetch(index: indexPath.row)
     }
 }
 
 extension ViewController: UICollectionViewDataSourcePrefetching {
-    func collectionView(_ collectionView: UICollectionView, prefetchItemsAt indexPaths: [IndexPath]) {
+    func collectionView(_: UICollectionView, prefetchItemsAt indexPaths: [IndexPath]) {
         log.debug("UICollectionViewDataSource - prefetchItemsAt: \(indexPaths)")
-        indexPaths.forEach { (indexPath) in
+        indexPaths.forEach { indexPath in
             // assume we only have one sction:
             viewModel.prefetch(index: indexPath.row)
         }
@@ -104,17 +104,17 @@ extension ViewController: UICollectionViewDataSourcePrefetching {
 class DataSource<ItemType>: NSObject, UICollectionViewDataSource {
     let reuseIdentifier: String
     var items: [ItemType]
-    let cellBinder: (ItemType, UICollectionViewCell) -> ()
+    let cellBinder: (ItemType, UICollectionViewCell) -> Void
 
     init(reuseIdentifier: String,
          items: [ItemType],
-         cellBinder: @escaping (ItemType, UICollectionViewCell) -> ()) {
+         cellBinder: @escaping (ItemType, UICollectionViewCell) -> Void) {
         self.reuseIdentifier = reuseIdentifier
         self.items = items
         self.cellBinder = cellBinder
     }
 
-    func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
+    func collectionView(_: UICollectionView, numberOfItemsInSection _: Int) -> Int {
         return items.count
     }
 

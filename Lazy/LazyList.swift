@@ -174,7 +174,7 @@ class LazyList<Element> {
     func items() -> [LazyResult<Element>?] {
         let requests = self.requests.readAll()
 
-        guard requests.count > 0 else {
+        guard !requests.isEmpty else {
             // if there are no requests yet just emit a placeholder...
             return [nil]
         }
@@ -190,7 +190,7 @@ class LazyList<Element> {
             .map { $0?.result }
 
         // if the last item is not an error or not empty (i.e. if it has a value add a placeholder to the bottom:
-        if let _ = requests.last??.result?.value {
+        if requests.last??.result?.value != nil {
             results.append(nil)
         }
 
@@ -251,31 +251,27 @@ class LazyList<Element> {
                 return
             }
 
-            self.onLoadBefore(
-                index,
-                { [weak self] result in
-                    guard let self = self else {
-                        return
+            self.onLoadBefore(index, { [weak self] result in
+                guard let self = self else {
+                    return
+                }
+
+                self.requests.updateAsync({ (requests) -> ([LazyRequest<Element>?]) in
+                    var updatedRequests = requests
+                    updatedRequests.remove(at: 0)
+
+                    if let result = result, !result.isEmpty {
+                        updatedRequests.insert(contentsOf: result.map { LazyRequest.wrap(value: $0) }, at: 0)
+                        updatedRequests.insert(nil, at: 0)
+                    } else {
+                        updatedRequests.append(LazyRequest.wrap(value: nil, error: nil))
                     }
 
-                    self.requests.updateAsync({ (requests) -> ([LazyRequest<Element>?]) in
-                        var updatedRequests = requests
-                        updatedRequests.remove(at: 0)
-
-                        if let result = result, !result.isEmpty {
-                            updatedRequests.insert(contentsOf: result.map { LazyRequest.wrap(value: $0) }, at: 0)
-                            updatedRequests.insert(nil, at: 0)
-                        } else {
-                            updatedRequests.append(LazyRequest.wrap(value: nil, error: nil))
-                        }
-
-                        return updatedRequests
-                    })
-                },
-                { [weak self] error in
-                    self?.requests[index - 1] = LazyRequest.wrap(error: error)
-                }
-            )
+                    return updatedRequests
+                })
+            }, { [weak self] error in
+                self?.requests[index - 1] = LazyRequest.wrap(error: error)
+            })
         }
     }
 
@@ -285,31 +281,27 @@ class LazyList<Element> {
                 return
             }
 
-            self.onLoadAfter(
-                index,
-                { [weak self] result in
-                    guard let self = self else {
-                        return
+            self.onLoadAfter(index, { [weak self] result in
+                guard let self = self else {
+                    return
+                }
+
+                self.requests.updateAsync({ (requests) -> ([LazyRequest<Element>?]) in
+                    var updatedRequests = requests
+                    updatedRequests.remove(at: updatedRequests.count - 1)
+
+                    if let result = result, !result.isEmpty {
+                        updatedRequests.insert(contentsOf: result.map { LazyRequest.wrap(value: $0) }, at: updatedRequests.count)
+                        updatedRequests.append(nil)
+                    } else {
+                        updatedRequests.append(LazyRequest.wrap(value: nil, error: nil))
                     }
 
-                    self.requests.updateAsync({ (requests) -> ([LazyRequest<Element>?]) in
-                        var updatedRequests = requests
-                        updatedRequests.remove(at: updatedRequests.count - 1)
-
-                        if let result = result, !result.isEmpty {
-                            updatedRequests.insert(contentsOf: result.map { LazyRequest.wrap(value: $0) }, at: updatedRequests.count)
-                            updatedRequests.append(nil)
-                        } else {
-                            updatedRequests.append(LazyRequest.wrap(value: nil, error: nil))
-                        }
-
-                        return updatedRequests
-                    })
-                },
-                { [weak self] error in
-                    self?.requests[index + 1] = LazyRequest.wrap(error: error)
-                }
-            )
+                    return updatedRequests
+                })
+            }, { [weak self] error in
+                self?.requests[index + 1] = LazyRequest.wrap(error: error)
+            })
         }
     }
 
@@ -319,15 +311,11 @@ class LazyList<Element> {
                 return
             }
 
-            self.onLoadItem(
-                index,
-                { [weak self] result in
-                    self?.requests[index] = LazyRequest.wrap(value: result)
-                },
-                { [weak self] error in
-                    self?.requests[index] = LazyRequest.wrap(error: error)
-                }
-            )
+            self.onLoadItem(index, { [weak self] result in
+                self?.requests[index] = LazyRequest.wrap(value: result)
+            }, { [weak self] error in
+                self?.requests[index] = LazyRequest.wrap(error: error)
+            })
         }
     }
 }
