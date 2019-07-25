@@ -1,4 +1,4 @@
-xcversion(version: "~> 10.2.1")
+xcversion(version: "~> 11.0.0")
 
 lane :lint_pod do
   # Allow output detail in console
