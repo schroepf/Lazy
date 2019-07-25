@@ -12,9 +12,9 @@
 // - add API to specify cache size for LazyList (and PagedLazyList)
 import Foundation
 
-struct LazyResult<Element> {
-    let value: Element?
-    let error: Error?
+public struct LazyResult<Element> {
+    public let value: Element?
+    public let error: Error?
 
     func isEmpty() -> Bool {
         return value == nil && error == nil
@@ -22,17 +22,17 @@ struct LazyResult<Element> {
 }
 
 extension LazyResult: CustomDebugStringConvertible {
-    var debugDescription: String {
+    public var debugDescription: String {
         return "LazyResult(value: \(String(describing: value)), error: \(String(describing: error)))"
     }
 }
 
-typealias Index = Int
+public typealias Index = Int
 
 // pass 'nil' as argument to this callback for items which don't exist (i.e. "out of bounds") - to signal that there is no item ...
-typealias SuccessCallback<Result> = (Result?) -> Void
-typealias ErrorCallback = (Error) -> Void
-typealias LoadItemHandler<Result> = (Index, @escaping SuccessCallback<Result>, @escaping ErrorCallback) -> Void
+public typealias SuccessCallback<Result> = (Result?) -> Void
+public typealias ErrorCallback = (Error) -> Void
+public typealias LoadItemHandler<Result> = (Index, @escaping SuccessCallback<Result>, @escaping ErrorCallback) -> Void
 
 private struct LazyRequest<Element> {
     // while result is "nil" the request is considered as ongoing...
@@ -55,7 +55,7 @@ private struct LazyRequest<Element> {
     }
 }
 
-class LazyList<Element> {
+public class LazyList<Element> {
     // A helper class to manage and synchronize access to the requests array...
     private class RequestsAccess<Element> {
         private let accessQueue = DispatchQueue(label: "LazyList.RequestsAccess")
@@ -130,7 +130,7 @@ class LazyList<Element> {
     })
 
     // TODO: Add documentation!
-    init(onLoadBefore: @escaping LoadItemHandler<[Element]>,
+    public init(onLoadBefore: @escaping LoadItemHandler<[Element]>,
          onLoadItem: @escaping LoadItemHandler<Element>,
          onLoadAfter: @escaping LoadItemHandler<[Element]>,
          onChanged: (() -> Void)? = nil) {
@@ -141,13 +141,13 @@ class LazyList<Element> {
     }
 
     // TODO: Add documentation
-    subscript(index: Index) -> LazyResult<Element>? {
+    public subscript(index: Index) -> LazyResult<Element>? {
         prefetch(index: index)
         return requests[index]?.result
     }
 
     // TODO: Add documentation
-    func prefetch(index: Index) {
+    public func prefetch(index: Index) {
         guard requests[index] == nil else {
             // a request is already started...
             return
@@ -171,7 +171,7 @@ class LazyList<Element> {
 
     // TODO: Add documentation
     // nil values in the result array are considered as "loading" items...
-    func items() -> [LazyResult<Element>?] {
+    public func items() -> [LazyResult<Element>?] {
         let requests = self.requests.readAll()
 
         guard !requests.isEmpty else {
@@ -197,7 +197,7 @@ class LazyList<Element> {
         return results
     }
 
-    func update(_ item: Element?, at index: Index) {
+    public func update(_ item: Element?, at index: Index) {
         requests.update { (requests) -> ([LazyRequest<Element>?]) in
             var result = requests
             result[index] = LazyRequest.from(item: item)
@@ -205,7 +205,7 @@ class LazyList<Element> {
         }
     }
 
-    func insert(_ item: Element?, at index: Index) {
+    public func insert(_ item: Element?, at index: Index) {
         requests.update { (requests) -> ([LazyRequest<Element>?]) in
             var result = requests
             result.insert(LazyRequest.from(item: item), at: index)
@@ -213,7 +213,7 @@ class LazyList<Element> {
         }
     }
 
-    func insert(contentsOf items: [Element?], at index: Index) {
+    public func insert(contentsOf items: [Element?], at index: Index) {
         let requestsToAdd = items.map { LazyRequest.from(item: $0) }
 
         requests.update { (requests) -> ([LazyRequest<Element>?]) in
@@ -223,15 +223,15 @@ class LazyList<Element> {
         }
     }
 
-    func append(_ item: Element?) {
+    public func append(_ item: Element?) {
         insert(item, at: requests.readAll().count)
     }
 
-    func append(contentsOf items: [Element?]) {
+    public func append(contentsOf items: [Element?]) {
         insert(contentsOf: items, at: requests.readAll().count)
     }
 
-    func remove(at index: Index) {
+    public func remove(at index: Index) {
         requests.update { (requests) -> ([LazyRequest<Element>?]) in
             var result = requests
             result.remove(at: index)
@@ -239,7 +239,7 @@ class LazyList<Element> {
         }
     }
 
-    func clear() {
+    public func clear() {
         requests.update { (_) -> ([LazyRequest<Element>?]) in
             [nil]
         }

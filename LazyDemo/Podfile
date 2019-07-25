@@ -1,7 +1,12 @@
 platform :ios, '8.0'
 use_frameworks!
 
-target 'Lazy' do
+workspace 'LazyDemo'
+project 'LazyDemoApp/LazyDemoApp.xcodeproj'
+
+target 'LazyDemoApp' do
+  pod 'LazyList', :path => '../'
+
   pod 'XCGLogger'
   pod 'Smile'
   pod 'DeepDiff'
