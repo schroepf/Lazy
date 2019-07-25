@@ -1,14 +1,14 @@
 //
-//  LazyUITests.swift
-//  LazyUITests
+//  LazyDemoAppUITests.swift
+//  LazyDemoAppUITests
 //
-//  Created by Tobias Schröpf on 06.11.18.
-//  Copyright © 2018 Tobias Schröpf. All rights reserved.
+//  Created by Tobias Schröpf on 25.07.19.
+//  Copyright © 2019 Tobias Schröpf. All rights reserved.
 //
 
 import XCTest
 
-class LazyUITests: XCTestCase {
+class LazyDemoAppUITests: XCTestCase {
 
     override func setUp() {
         // Put setup code here. This method is called before the invocation of each test method in the class.
