@@ -1,0 +1,31 @@
+format_version: '8'
+default_step_lib_source: https://github.com/bitrise-io/bitrise-steplib.git
+project_type: other
+workflows:
+  setup:
+    steps:
+    - script@1.1.5:
+        title: 'bundle install'
+        inputs:
+        - content: |-
+            gem uninstall bundler --force
+            gem install bundler --force
+            bundle install
+  ci:
+    before_run:
+    - setup
+    steps:
+    - script@1.1.5:
+        title: 'lint pod'
+        inputs:
+        - content: |-
+            bundle exec fastlane lint_pod
+  release:
+    before_run:
+    - ci
+    steps:
+    - script@1.1.5:
+        title: 'release pod'
+        inputs:
+        - content: |-
+            bundle exec fastlane push_pod
