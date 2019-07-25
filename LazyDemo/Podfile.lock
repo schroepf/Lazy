@@ -39,7 +39,7 @@ EXTERNAL SOURCES:
 SPEC CHECKSUMS:
   DeepDiff: e329bc46dd14ca788d8ec08d34420799ba1d77f2
   Differ: 6c7477d6187e8c36d02ec342a3c321061b85a0ea
-  LazyList: 04bd9d8cfb0b9c5e7ff4834cc394fadd3c858116
+  LazyList: 4256c78e7bbb74104f18a605b3345c733846ad1b
   ObjcExceptionBridging: c30e00eb3700467e695faeea30e26e18bd445001
   Smile: 21ff6c48e06ecfcee605cca32aedd74d5810e34a
   SwiftFormat: d0e2118da5bfccc0158f0b8eff80c476c5acd984

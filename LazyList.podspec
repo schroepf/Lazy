@@ -7,4 +7,8 @@ Pod::Spec.new do |spec|
   spec.summary      = 'Helper for lazy loading use cases'
   spec.source       = { :git => 'https://github.com/schroepf/LazyList.git', :tag => spec.version }
   spec.source_files = 'LazyList/Sources/LazyList/*.swift'
+
+  spec.platform                = :ios
+  spec.ios.deployment_target   = '8.0'
+  spec.swift_version           = '5.0'
 end
