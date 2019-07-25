@@ -1,0 +1,11 @@
+xcversion(version: "~> 10.2.1")
+
+lane :lint_pod do
+  # Allow output detail in console
+  pod_lib_lint(use_bundle_exec: true)
+end
+
+lane :push_pod do
+  # Allow output detail in console
+  pod_push(use_bundle_exec: true, path: "LazyList.podspec")
+end
