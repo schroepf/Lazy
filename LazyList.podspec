@@ -1,6 +1,6 @@
 Pod::Spec.new do |spec|
   spec.name         = 'LazyList'
-  spec.version      = '0.0.1'
+  spec.version      = '0.0.2'
   spec.license      = { :type => 'MIT', :file => 'LICENSE.txt' }
   spec.homepage     = 'https://github.com/schroepf/Lazy'
   spec.authors      = { 'Tobias Schröpf' => 'schroepf@gmail.com' }
