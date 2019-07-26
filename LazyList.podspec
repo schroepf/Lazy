@@ -11,4 +11,8 @@ Pod::Spec.new do |spec|
   spec.platform                = :ios
   spec.ios.deployment_target   = '8.0'
   spec.swift_version           = '5.0'
+
+  spec.test_spec 'Tests' do |test_spec|
+    test_spec.source_files = 'LazyList/Tests/LazyListTests/*.swift'
+  end
 end

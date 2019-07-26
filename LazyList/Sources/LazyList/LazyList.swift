@@ -5,11 +5,6 @@
 //  Created by Tobias Schröpf on 06.11.18.
 //  Copyright © 2018 Tobias Schröpf. All rights reserved.
 //
-
-// TODOs:
-// - allow cancellation of requests
-// - refactor size() to count property
-// - add API to specify cache size for LazyList (and PagedLazyList)
 import Foundation
 
 public struct LazyResult<Element> {
@@ -129,11 +124,17 @@ public class LazyList<Element> {
         }
     })
 
-    // TODO: Add documentation!
+    /// Initialize the lazy list with its callbacks.
+    ///
+    /// - Parameters:
+    ///   - onLoadBefore: will be called when items smaller then a given index have to be loaded
+    ///   - onLoadItem: will be called when a item with a specific index needs to be loaded
+    ///   - onLoadAfter: will be called when items bigger then a given index have to be loaded
+    ///   - onChanged: will be called when the list content has changed
     public init(onLoadBefore: @escaping LoadItemHandler<[Element]>,
-         onLoadItem: @escaping LoadItemHandler<Element>,
-         onLoadAfter: @escaping LoadItemHandler<[Element]>,
-         onChanged: (() -> Void)? = nil) {
+                onLoadItem: @escaping LoadItemHandler<Element>,
+                onLoadAfter: @escaping LoadItemHandler<[Element]>,
+                onChanged: (() -> Void)? = nil) {
         self.onLoadBefore = onLoadBefore
         self.onLoadItem = onLoadItem
         self.onLoadAfter = onLoadAfter
