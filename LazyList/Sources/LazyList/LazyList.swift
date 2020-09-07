@@ -14,6 +14,10 @@ public struct LazyResult<Element> {
     func isEmpty() -> Bool {
         return value == nil && error == nil
     }
+
+    static func empty() -> LazyResult<Element> {
+        return LazyResult(value: nil, error: nil)
+    }
 }
 
 extension LazyResult: CustomDebugStringConvertible {
@@ -33,23 +37,28 @@ private struct LazyRequest<Element> {
     // while result is "nil" the request is considered as ongoing...
     let result: LazyResult<Element>?
 
-    func hasResult() -> Bool {
-        return result != nil
-    }
-
     func isLoading() -> Bool {
         return result == nil
     }
 
-    static func from(item: Element?) -> LazyRequest? {
-        return item == nil ? nil : LazyRequest(result: LazyResult(value: item, error: nil))
+    static func from(error: Error) -> LazyRequest {
+        return LazyRequest(result: LazyResult(value: nil, error: error))
     }
 
-    static func wrap(value: Element? = nil, error: Error? = nil) -> LazyRequest {
-        return LazyRequest(result: LazyResult(value: value, error: error))
+    static func from(item: Element) -> LazyRequest {
+        return LazyRequest(result: LazyResult(value: item, error: nil))
+    }
+
+    static func emptyResult() -> LazyRequest {
+        return LazyRequest(result: LazyResult.empty())
     }
 }
 
+/// DataStructure
+/// The items of the LazyList are represented by LazyRequests, which in turn will hold a 'nil' value as long as the request is ongoing and an actual value of LazyResult once the
+/// request has finished. The LazyResult in turn can hold a value (if the request returned an actual item), an error (if the request failed) or be empty (if the request retruned
+/// no result - i.e. no item for the given index -> out of range)
+///  - LazyList -> [ LazyRequest -> LazyResult? ]
 public class LazyList<Element> {
     // A helper class to manage and synchronize access to the requests array...
     private class RequestsAccess<Element> {
@@ -60,6 +69,9 @@ public class LazyList<Element> {
             self.onChanged = onChanged
         }
 
+        /// Represents the current state of the list, contains:
+        /// - a LazyRequest representing the loading state of the item for the given index (which in turn can be "loading", "successful" or "errored")
+        /// - nil if there is no item for the given index
         private var requests: [LazyRequest<Element>?] = [nil] {
             didSet {
                 onChanged()
@@ -68,7 +80,9 @@ public class LazyList<Element> {
 
         fileprivate subscript(index: Index) -> LazyRequest<Element>? {
             get {
-                return accessQueue.sync { requests[index] }
+                return accessQueue.sync {
+                    requests[index]
+                }
             }
 
             set {
@@ -114,7 +128,7 @@ public class LazyList<Element> {
     private let onLoadAfter: LoadItemHandler<[Element]>
     private let onChanged: (() -> Void)?
 
-    private lazy var requests = RequestsAccess<Element>(onChanged: {
+    private lazy var requestsAccess = RequestsAccess<Element>(onChanged: {
         guard let onChanged = self.onChanged else {
             return
         }
@@ -144,19 +158,21 @@ public class LazyList<Element> {
     // TODO: Add documentation
     public subscript(index: Index) -> LazyResult<Element>? {
         prefetch(index: index)
-        return requests[index]?.result
+        return requestsAccess[index]?.result
     }
 
     // TODO: Add documentation
     public func prefetch(index: Index) {
-        guard requests[index] == nil else {
+        // FIXME: shouldn't we instead test if the last index is empty (instead of checking for nil?)
+        // - or probably both: is the request for the index nil (a request can be created and started) or empty (there is no item for the requested and all following indexes)?
+        guard requestsAccess[index] == nil else {
             // a request is already started...
             return
         }
 
-        requests.update { (requests) -> ([LazyRequest<Element>?]) in
-            var result = requests
-            result[index] = LazyRequest(result: nil) // FIXME: This triggers an unnecessary onChanged() call
+        requestsAccess.update { requests -> [LazyRequest<Element>?] in
+            var updatedRequests = requests
+            updatedRequests[index] = LazyRequest(result: nil)
 
             if index == 0, requests.count > 1 {
                 triggerLoadBefore(index: index + 1)
@@ -166,14 +182,14 @@ public class LazyList<Element> {
                 triggerLoadItem(index: index)
             }
 
-            return result
+            return updatedRequests
         }
     }
 
     // TODO: Add documentation
     // nil values in the result array are considered as "loading" items...
-    public func items() -> [LazyResult<Element>?] {
-        let requests = self.requests.readAll()
+    public var items: [LazyResult<Element>?] {
+        let requests = self.requestsAccess.readAll()
 
         guard !requests.isEmpty else {
             // if there are no requests yet just emit a placeholder...
@@ -190,7 +206,7 @@ public class LazyList<Element> {
             }
             .map { $0?.result }
 
-        // if the last item is not an error or not empty (i.e. if it has a value add a placeholder to the bottom:
+        // if the last item is not an error or not empty (i.e. if it has a value) add a "loading" placeholder to the bottom:
         if requests.last??.result?.value != nil {
             results.append(nil)
         }
@@ -198,42 +214,42 @@ public class LazyList<Element> {
         return results
     }
 
-    public func update(_ item: Element?, at index: Index) {
-        requests.update { (requests) -> ([LazyRequest<Element>?]) in
+    public func update(_ item: Element, at index: Index) {
+        requestsAccess.update { (requests) -> ([LazyRequest<Element>?]) in
             var result = requests
             result[index] = LazyRequest.from(item: item)
             return result
         }
     }
 
-    public func insert(_ item: Element?, at index: Index) {
-        requests.update { (requests) -> ([LazyRequest<Element>?]) in
+    public func insert(_ item: Element, at index: Index) {
+        requestsAccess.update { (requests) -> ([LazyRequest<Element>?]) in
             var result = requests
             result.insert(LazyRequest.from(item: item), at: index)
             return result
         }
     }
 
-    public func insert(contentsOf items: [Element?], at index: Index) {
+    public func insert(contentsOf items: [Element], at index: Index) {
         let requestsToAdd = items.map { LazyRequest.from(item: $0) }
 
-        requests.update { (requests) -> ([LazyRequest<Element>?]) in
+        requestsAccess.update { (requests) -> ([LazyRequest<Element>?]) in
             var result = requests
             result.insert(contentsOf: requestsToAdd, at: index)
             return result
         }
     }
 
-    public func append(_ item: Element?) {
-        insert(item, at: requests.readAll().count)
+    public func append(_ item: Element) {
+        insert(item, at: requestsAccess.readAll().count)
     }
 
-    public func append(contentsOf items: [Element?]) {
-        insert(contentsOf: items, at: requests.readAll().count)
+    public func append(contentsOf items: [Element]) {
+        insert(contentsOf: items, at: requestsAccess.readAll().count)
     }
 
     public func remove(at index: Index) {
-        requests.update { (requests) -> ([LazyRequest<Element>?]) in
+        requestsAccess.update { (requests) -> ([LazyRequest<Element>?]) in
             var result = requests
             result.remove(at: index)
             return result
@@ -241,37 +257,43 @@ public class LazyList<Element> {
     }
 
     public func clear() {
-        requests.update { (_) -> ([LazyRequest<Element>?]) in
+        requestsAccess.update { (_) -> ([LazyRequest<Element>?]) in
             [nil]
         }
     }
 
+    private func isComplete() -> Bool {
+        guard let result = requestsAccess.readAll().last??.result else { return false }
+        return result.isEmpty()
+    }
+
     private func triggerLoadBefore(index: Index) {
         callbackQueue.async { [weak self] in
-            guard let self = self else {
-                return
-            }
+            guard let self = self else { return }
 
             self.onLoadBefore(index, { [weak self] result in
-                guard let self = self else {
-                    return
-                }
+                guard let self = self else { return }
 
-                self.requests.updateAsync({ (requests) -> ([LazyRequest<Element>?]) in
+                self.requestsAccess.updateAsync { (requests) -> ([LazyRequest<Element>?]) in
                     var updatedRequests = requests
                     updatedRequests.remove(at: 0)
 
-                    if let result = result, !result.isEmpty {
-                        updatedRequests.insert(contentsOf: result.map { LazyRequest.wrap(value: $0) }, at: 0)
-                        updatedRequests.insert(nil, at: 0)
-                    } else {
-                        updatedRequests.append(LazyRequest.wrap(value: nil, error: nil))
+                    guard let result = result, !result.isEmpty else {
+                        // if Callback was called with a 'nil' result or an empty list we assume the list has been fully loaded
+                        // add an emptyResult() as a marker that there are no more items from this index on
+                        updatedRequests.insert(LazyRequest.emptyResult(), at: 0)
+                        return updatedRequests
                     }
 
+                    // when actual results were loaded insert them at the beginning (because we triggered a "load before" call)...
+                    updatedRequests.insert(contentsOf: result.map { LazyRequest.from(item: $0) }, at: 0)
+                    // ... and add a 'nil' value as a marker that there could potentially be even more items
+                    updatedRequests.insert(nil, at: 0)
+
                     return updatedRequests
-                })
+                }
             }, { [weak self] error in
-                self?.requests[index - 1] = LazyRequest.wrap(error: error)
+                self?.requestsAccess[index - 1] = LazyRequest.from(error: error)
             })
         }
     }
@@ -287,21 +309,26 @@ public class LazyList<Element> {
                     return
                 }
 
-                self.requests.updateAsync({ (requests) -> ([LazyRequest<Element>?]) in
+                self.requestsAccess.updateAsync({ requests -> [LazyRequest<Element>?] in
                     var updatedRequests = requests
                     updatedRequests.remove(at: updatedRequests.count - 1)
 
-                    if let result = result, !result.isEmpty {
-                        updatedRequests.insert(contentsOf: result.map { LazyRequest.wrap(value: $0) }, at: updatedRequests.count)
-                        updatedRequests.append(nil)
-                    } else {
-                        updatedRequests.append(LazyRequest.wrap(value: nil, error: nil))
+                    guard let result = result, !result.isEmpty else {
+                        // if Callback was called with a 'nil' result or an empty list we assume the list has been fully loaded
+                        // add an emptyResult() as a marker that there are no more items from this index on
+                        updatedRequests.append(LazyRequest.emptyResult())
+                        return updatedRequests
                     }
+
+                    // when actual results were loaded append them to the end (because we triggered a "load after" call)...
+                    updatedRequests.insert(contentsOf: result.map { LazyRequest.from(item: $0) }, at: updatedRequests.count)
+                    // ... and append a 'nil' value after them as a marker that there could potentially be even more items
+                    updatedRequests.append(nil)
 
                     return updatedRequests
                 })
             }, { [weak self] error in
-                self?.requests[index + 1] = LazyRequest.wrap(error: error)
+                self?.requestsAccess[index + 1] = LazyRequest.from(error: error)
             })
         }
     }
@@ -313,9 +340,15 @@ public class LazyList<Element> {
             }
 
             self.onLoadItem(index, { [weak self] result in
-                self?.requests[index] = LazyRequest.wrap(value: result)
+                guard let result = result else {
+                    // if the result is 'nil' then there are no actual items for the requested index... -> represented by "emptyResult()"
+                    self?.requestsAccess[index] = LazyRequest.emptyResult()
+                    return
+                }
+
+                self?.requestsAccess[index] = LazyRequest.from(item: result)
             }, { [weak self] error in
-                self?.requests[index] = LazyRequest.wrap(error: error)
+                self?.requestsAccess[index] = LazyRequest.from(error: error)
             })
         }
     }
